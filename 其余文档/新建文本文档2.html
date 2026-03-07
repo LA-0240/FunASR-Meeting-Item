@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASR语音识别 + 会议纪要生成</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Microsoft YaHei", sans-serif; }
+        body { background: #f5f7fa; padding: 40px; }
+        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #333; margin-bottom: 30px; }
+        
+        /* 标签页样式 */
+        .tabs { display: flex; border-bottom: 1px solid #ddd; margin-bottom: 20px; }
+        .tab { padding: 12px 24px; cursor: pointer; border: none; background: none; font-size: 16px; font-weight: 600; color: #666; }
+        .tab.active { color: #007bff; border-bottom: 2px solid #007bff; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; color: #555; }
+        input[type="file"], input[type="text"] { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; }
+        button { padding: 12px 24px; background: #007bff; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; margin-top: 10px; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        .loading { text-align: center; margin-top: 20px; color: #007bff; display: none; }
+        .result-area { margin-top: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 5px; background: #f9f9f9; display: none; }
+        .result-area h3 { margin-bottom: 15px; color: #333; }
+        .segment { 
+            margin-bottom: 20px; 
+            padding: 15px; 
+            border-radius: 5px; 
+            background: #fff; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .spk-label { 
+            font-weight: 600; 
+            color: #007bff; 
+            margin-bottom: 8px;
+            font-size: 15px;
+        }
+        .text-content { 
+            white-space: pre-wrap; 
+            word-wrap: break-word; 
+            line-height: 1.8; 
+            color: #333;
+            font-size: 14px;
+        }
+        .error { color: #dc3545; margin-top: 10px; display: none; }
+        .note { margin-top: 10px; font-size: 12px; color: #6c757d; }
+        .download-btn { background: #28a745; margin-top: 20px; }
+        .download-btn:hover { background: #218838; }
+        .gen-summary-btn { background: #17a2b8; margin-left: 10px; }
+        .gen-summary-btn:hover { background: #138496; }
+        #summaryContent { min-height: 300px; line-height: 1.8; font-size: 14px; color: #333; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>语音识别 & 会议纪要生成工具</h1>
+        
+        <!-- 基础表单 -->
+        <div class="form-group">
+            <label for="audioFile">选择音频文件：</label>
+            <input type="file" id="audioFile" accept=".wav,.mp3,.ogg,.flac">
+        </div>
+        <div class="form-group">
+            <label for="hotword">热词（可选，多个用逗号分隔）：</label>
+            <input type="text" id="hotword" placeholder="例如：创业项目,宠物项圈,VR非遗保护">
+        </div>
+        <button id="recognizeBtn">开始语音识别</button>
+        <button id="genSummaryBtn" class="gen-summary-btn" disabled>生成会议纪要</button>
+
+        <!-- 加载/错误提示 -->
+        <div class="loading" id="loading">处理中，请稍候...（CPU模式较慢）</div>
+        <div class="error" id="errorMsg"></div>
+
+        <!-- 标签页 -->
+        <div class="tabs">
+            <button class="tab active" data-tab="transcriptionTab">语音分离结果</button>
+            <button class="tab" data-tab="summaryTab">会议纪要</button>
+        </div>
+
+        <!-- 语音分离结果页 -->
+        <div class="tab-content active" id="transcriptionTab">
+            <div class="result-area" id="transcriptionResultArea">
+                <h3>语音分离结果：<span id="fileName"></span></h3>
+                <div id="transcriptionContent"></div>
+                <!-- 关键：添加type="button"阻止默认提交行为 -->
+                <button type="button" class="download-btn" id="exportTranscriptionBtn">导出语音分离结果（Word）</button>
+            </div>
+        </div>
+
+        <!-- 会议纪要页 -->
+        <div class="tab-content" id="summaryTab">
+            <div class="result-area" id="summaryResultArea">
+                <h3>会议纪要</h3>
+                <div id="summaryContent"></div>
+                <!-- 关键：添加type="button"阻止默认提交行为 -->
+                <button type="button" class="download-btn" id="exportSummaryBtn">导出会议纪要（Word）</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM 元素
+        const audioFile = document.getElementById('audioFile');
+        const hotword = document.getElementById('hotword');
+        const recognizeBtn = document.getElementById('recognizeBtn');
+        const genSummaryBtn = document.getElementById('genSummaryBtn');
+        const loading = document.getElementById('loading');
+        const errorMsg = document.getElementById('errorMsg');
+        const fileName = document.getElementById('fileName');
+        
+        // 语音分离相关
+        const transcriptionResultArea = document.getElementById('transcriptionResultArea');
+        const transcriptionContent = document.getElementById('transcriptionContent');
+        const exportTranscriptionBtn = document.getElementById('exportTranscriptionBtn');
+        
+        // 会议纪要相关
+        const summaryResultArea = document.getElementById('summaryResultArea');
+        const summaryContent = document.getElementById('summaryContent');
+        const exportSummaryBtn = document.getElementById('exportSummaryBtn');
+        
+        // 标签页相关
+        const tabs = document.querySelectorAll('.tab');
+        const tabContents = document.querySelectorAll('.tab-content');
+
+        // 全局存储数据
+        let globalTranscriptionData = null; // 语音分离原始数据
+        let globalTranscriptionText = "";   // 拼接后的转录文本（供LLM使用）
+        let globalSummaryText = "";         // 会议纪要文本
+
+        // ========== 标签页切换逻辑 ==========
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                tabContents.forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                const targetTab = document.getElementById(tab.dataset.tab);
+                targetTab.classList.add('active');
+            });
+        });
+
+        // ========== 语音分离结果渲染 ==========
+        function renderTranscription(resultData) {
+            globalTranscriptionData = resultData;
+            transcriptionContent.innerHTML = '';
+            globalTranscriptionText = "";
+
+            let segments = [];
+            if (resultData.transcription && Array.isArray(resultData.transcription[0]?.sentence_info)) {
+                segments = resultData.transcription[0].sentence_info;
+            } else if (Array.isArray(resultData.transcription)) {
+                segments = resultData.transcription;
+            } else if (typeof resultData.transcription === 'object') {
+                segments = [resultData.transcription];
+            } else {
+                segments = [{spk: "说话人1", text: resultData.transcription || "无识别结果"}];
+            }
+
+            segments.forEach((segment, idx) => {
+                const spkId = segment.spk || segment.speaker || `说话人${idx+1}`;
+                const text = segment.text || "无文本内容";
+                globalTranscriptionText += `【说话人${spkId}】：${text}\n`;
+
+                const segmentDiv = document.createElement('div');
+                segmentDiv.className = 'segment';
+                segmentDiv.innerHTML = `
+                    <div class="spk-label">片段${idx+1}：${spkId}</div>
+                    <div class="text-content">${text}</div>
+                `;
+                transcriptionContent.appendChild(segmentDiv);
+            });
+
+            transcriptionResultArea.style.display = 'block';
+            genSummaryBtn.disabled = false;
+        }
+
+        // ========== 会议纪要生成逻辑 ==========
+        async function generateSummary() {
+            if (!globalTranscriptionText) {
+                alert('暂无语音转录文本，无法生成纪要！');
+                return;
+            }
+
+            loading.style.display = 'block';
+            genSummaryBtn.disabled = true;
+            errorMsg.style.display = 'none';
+
+            try {
+                const response = await fetch('http://localhost:8000/generate_summary', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        transcription_text: globalTranscriptionText,
+                        output_format: "docx"
+                    }),
+                    timeout: 600000
+                });
+
+                if (!response.ok) {
+                    throw new Error(`纪要生成失败：${response.status} ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                if (result.meeting_minutes) {
+                    globalSummaryText = result.meeting_minutes;
+                    summaryContent.innerHTML = globalSummaryText.replace(/\n/g, '<br>');
+                    summaryResultArea.style.display = 'block';
+                    // 切换到纪要标签页
+                    tabs.forEach(t => t.classList.remove('active'));
+                    tabContents.forEach(c => c.classList.remove('active'));
+                    document.querySelector('[data-tab="summaryTab"]').classList.add('active');
+                    document.getElementById('summaryTab').classList.add('active');
+                } else {
+                    throw new Error('未返回有效纪要内容');
+                }
+            } catch (err) {
+                errorMsg.textContent = `纪要生成失败：${err.message}`;
+                errorMsg.style.display = 'block';
+                console.error('纪要生成错误：', err);
+            } finally {
+                loading.style.display = 'none';
+                genSummaryBtn.disabled = false;
+            }
+        }
+
+        // ========== 修复后的导出逻辑（核心） ==========
+        async function exportToWord(type, e) {
+            // 关键1：强制阻止页面默认行为（防止刷新）
+            e.preventDefault();
+            e.stopPropagation();
+
+            errorMsg.style.display = 'none';
+            let success = false;
+
+            try {
+                let apiUrl = '';
+                let requestBody = {};
+                let fileNamePrefix = '';
+
+                // 修正接口地址（和后端严格一致）
+                if (type === 'transcription') {
+                    if (!globalTranscriptionText) {
+                        throw new Error('暂无语音分离结果可导出');
+                    }
+                    apiUrl = 'http://localhost:8000/export_transcription_word';
+                    fileNamePrefix = fileName.textContent || '语音分离结果';
+                    requestBody = {
+                        transcription_text: globalTranscriptionText,
+                        file_name: fileNamePrefix
+                    };
+                } else if (type === 'summary') {
+                    if (!globalSummaryText) {
+                        throw new Error('暂无会议纪要可导出');
+                    }
+                    apiUrl = 'http://localhost:8000/export_summary_word';
+                    fileNamePrefix = '会议纪要';
+                    requestBody = {
+                        summary_text: globalSummaryText,
+                        file_name: fileNamePrefix
+                    };
+                }
+
+                // 关键2：添加完整的请求头（解决跨域/扩展拦截）
+                const headers = new Headers();
+                headers.append('Content-Type', 'application/json');
+                headers.append('X-Requested-With', 'XMLHttpRequest');
+
+                // 关键3：使用Promise封装，避免异步中断
+                const response = await new Promise((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', apiUrl, true);
+                    xhr.responseType = 'blob'; // 二进制流
+                    
+                    // 设置请求头
+                    xhr.setRequestHeader('Content-Type', 'application/json');
+                    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                    
+                    // 成功回调
+                    xhr.onload = function() {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            resolve(xhr);
+                        } else {
+                            reject(new Error(`请求失败：${xhr.status} - ${xhr.statusText}`));
+                        }
+                    };
+                    
+                    // 错误回调
+                    xhr.onerror = function() {
+                        reject(new Error('网络请求失败，请检查后端服务是否启动'));
+                    };
+                    
+                    // 超时回调
+                    xhr.timeout = 60000;
+                    xhr.ontimeout = function() {
+                        reject(new Error('请求超时，请重试'));
+                    };
+                    
+                    // 发送请求
+                    xhr.send(JSON.stringify(requestBody));
+                });
+
+                // 处理Blob文件
+                const blob = response.response;
+                if (!blob) {
+                    throw new Error('后端未返回有效文件流');
+                }
+
+                // 关键4：创建下载链接（稳定版）
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = downloadUrl;
+                a.download = `${fileNamePrefix}_${new Date().getTime()}.docx`;
+                a.style.display = 'none';
+                document.body.appendChild(a);
+                
+                // 强制触发点击（避免扩展拦截）
+                const clickEvent = new MouseEvent('click', {
+                    view: window,
+                    bubbles: true,
+                    cancelable: true
+                });
+                a.dispatchEvent(clickEvent);
+
+                // 清理资源
+                setTimeout(() => {
+                    window.URL.revokeObjectURL(downloadUrl);
+                    document.body.removeChild(a);
+                }, 1000);
+
+                success = true;
+                alert(`${type === 'transcription' ? '语音分离结果' : '会议纪要'}导出成功！`);
+            } catch (err) {
+                errorMsg.textContent = `导出失败：${err.message}`;
+                errorMsg.style.display = 'block';
+                console.error(`导出${type}错误：`, err);
+                // 兜底：提示检查后端
+                if (err.message.includes('网络请求失败')) {
+                    alert('导出失败！请检查：\n1. 后端服务是否在8000端口运行\n2. 前端接口地址是否正确\n3. 防火墙/杀毒软件是否拦截');
+                }
+            } finally {
+                // 确保不会触发页面刷新
+                if (!success) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                }
+            }
+        }
+
+        // ========== 事件绑定（核心修复） ==========
+        // 语音识别按钮
+        recognizeBtn.addEventListener('click', async (e) => {
+            e.preventDefault(); // 阻止默认行为
+            errorMsg.style.display = 'none';
+            transcriptionResultArea.style.display = 'none';
+            summaryResultArea.style.display = 'none';
+            globalTranscriptionData = null;
+            globalTranscriptionText = "";
+            globalSummaryText = "";
+
+            if (!audioFile.files.length) {
+                errorMsg.textContent = '请先选择音频文件！';
+                errorMsg.style.display = 'block';
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', audioFile.files[0]);
+            formData.append('batch_size_s', 300);
+            if (hotword.value.trim()) formData.append('hotword', hotword.value.trim());
+
+            recognizeBtn.disabled = true;
+            loading.style.display = 'block';
+
+            try {
+                const response = await fetch('http://localhost:8000/asr', {
+                    method: 'POST',
+                    body: formData,
+                    timeout: 300000
+                });
+
+                if (!response.ok) throw new Error(`请求失败：${response.status} ${response.statusText}`);
+                const result = await response.json();
+                fileName.textContent = result.filename || audioFile.files[0].name;
+                renderTranscription(result);
+            } catch (err) {
+                errorMsg.textContent = `识别失败：${err.message}`;
+                errorMsg.style.display = 'block';
+                console.error('识别错误：', err);
+            } finally {
+                recognizeBtn.disabled = false;
+                loading.style.display = 'none';
+            }
+        });
+
+        // 生成纪要按钮
+        genSummaryBtn.addEventListener('click', (e) => {
+            e.preventDefault(); // 阻止默认行为
+            generateSummary();
+        });
+
+        // 导出语音分离结果（核心：传递事件对象+阻止默认行为）
+        exportTranscriptionBtn.addEventListener('click', (e) => {
+            exportToWord('transcription', e);
+        });
+
+        // 导出会议纪要
+        exportSummaryBtn.addEventListener('click', (e) => {
+            exportToWord('summary', e);
+        });
+
+        // 关键：阻止页面全局的表单提交行为
+        document.addEventListener('submit', (e) => {
+            e.preventDefault();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASR语音识别（标点+说话人区分）</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Microsoft YaHei", sans-serif; }
+        body { background: #f5f7fa; padding: 40px; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #333; margin-bottom: 30px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; color: #555; }
+        input[type="file"], input[type="text"] { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; }
+        button { width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; margin-top: 10px; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        .loading { text-align: center; margin-top: 20px; color: #007bff; display: none; }
+        .result-area { margin-top: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 5px; background: #f9f9f9; display: none; }
+        .result-area h3 { margin-bottom: 15px; color: #333; }
+        .segment { 
+            margin-bottom: 20px; 
+            padding: 15px; 
+            border-radius: 5px; 
+            background: #fff; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .spk-label { 
+            font-weight: 600; 
+            color: #007bff; 
+            margin-bottom: 8px;
+            font-size: 15px;
+        }
+        .text-content { 
+            white-space: pre-wrap; 
+            word-wrap: break-word; 
+            line-height: 1.8; 
+            color: #333;
+            font-size: 14px;
+        }
+        .error { color: #dc3545; margin-top: 10px; display: none; }
+        .note { margin-top: 10px; font-size: 12px; color: #6c757d; }
+        .download-btn { background: #28a745; margin-top: 20px; }
+        .download-btn:hover { background: #218838; }
+    </style>
+    <!-- 改用最稳定的低版本docx，彻底避开API兼容问题 -->
+    <script src="https://unpkg.com/docx@6.0.0/build/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>语音识别工具（标点+说话人区分）</h1>
+        
+        <div class="form-group">
+            <label for="audioFile">选择音频文件：</label>
+            <input type="file" id="audioFile" accept=".wav,.mp3,.ogg,.flac">
+        </div>
+
+        <div class="form-group">
+            <label for="hotword">热词（可选，多个用逗号分隔）：</label>
+            <input type="text" id="hotword" placeholder="例如：创业项目,宠物项圈,VR非遗保护">
+        </div>
+
+        <button id="recognizeBtn">开始识别</button>
+
+        <div class="loading" id="loading">正在识别中（CPU模式处理较慢，请稍候...）</div>
+        <div class="error" id="errorMsg"></div>
+
+        <div class="result-area" id="resultArea">
+            <h3>识别结果：<span id="fileName"></span></h3>
+            <div id="transcriptionResult"></div>
+            <!-- 导出Word按钮 -->
+            <button class="download-btn" id="exportWordBtn">导出为Word文档</button>
+        </div>
+    </div>
+
+    <script>
+        // 获取DOM元素
+        const audioFile = document.getElementById('audioFile');
+        const hotword = document.getElementById('hotword');
+        const recognizeBtn = document.getElementById('recognizeBtn');
+        const loading = document.getElementById('loading');
+        const errorMsg = document.getElementById('errorMsg');
+        const resultArea = document.getElementById('resultArea');
+        const fileName = document.getElementById('fileName');
+        const transcriptionResult = document.getElementById('transcriptionResult');
+        const exportWordBtn = document.getElementById('exportWordBtn');
+        
+        // 全局存储识别结果
+        let globalResultData = null;
+
+        // 核心修复：解析模型返回结果的逻辑
+        function renderResult(resultData) {
+            // 保存结果到全局
+            globalResultData = resultData;
+            // 清空原有内容
+            transcriptionResult.innerHTML = '';
+            
+            // 适配模型返回的新格式（sentence_info）
+            let segments = [];
+            // 优先读取sentence_info（模型实际返回的字段）
+            if (resultData.transcription && Array.isArray(resultData.transcription[0]?.sentence_info)) {
+                segments = resultData.transcription[0].sentence_info;
+            } 
+            // 兼容原有的transcription格式
+            else if (Array.isArray(resultData.transcription)) {
+                segments = resultData.transcription;
+            } 
+            // 兜底：兼容其他异常格式
+            else if (typeof resultData.transcription === 'object') {
+                segments = [resultData.transcription];
+            } else {
+                segments = [{spk: "说话人1", text: resultData.transcription || "无识别结果"}];
+            }
+
+            // 渲染每个说话人片段
+            segments.forEach((segment, idx) => {
+                // 提取说话人ID和文本（适配sentence_info结构，增加多层兜底）
+                const spkId = segment.spk || segment.speaker || `说话人${idx+1}`;
+                const text = segment.text || "无文本内容";
+                
+                // 创建片段DOM
+                const segmentDiv = document.createElement('div');
+                segmentDiv.className = 'segment';
+                
+                // 拼接HTML（确保只渲染文本，而非对象）
+                segmentDiv.innerHTML = `
+                    <div class="spk-label">片段${idx+1}：${spkId}</div>
+                    <div class="text-content">${text}</div>
+                `;
+                
+                // 添加到结果区域
+                transcriptionResult.appendChild(segmentDiv);
+            });
+        }
+
+        // 修复Word生成逻辑（适配docx@6.0.0）
+        async function generateWordDocument() {
+            // 前置校验
+            if (!globalResultData) {
+                alert('暂无识别结果可导出！');
+                return;
+            }
+            
+            // 校验docx库是否加载成功
+            if (typeof window.docx === 'undefined' || !window.docx.Document || !window.docx.Packer) {
+                alert('Word生成库加载失败，请刷新页面重试！');
+                return;
+            }
+
+            try {
+                // 解构docx基础对象（6.0.0版本兼容写法）
+                const { Document, Paragraph, TextRun, Packer } = window.docx;
+                
+                // 1. 解析识别结果
+                let segments = [];
+                if (globalResultData.transcription && Array.isArray(globalResultData.transcription[0]?.sentence_info)) {
+                    segments = globalResultData.transcription[0].sentence_info;
+                } else if (Array.isArray(globalResultData.transcription)) {
+                    segments = globalResultData.transcription;
+                } else if (typeof globalResultData.transcription === 'object') {
+                    segments = [globalResultData.transcription];
+                } else {
+                    segments = [{spk: "说话人1", text: globalResultData.transcription || "无识别结果"}];
+                }
+
+                // 2. 创建最简单的Word文档（避开复杂配置，减少兼容问题）
+                const doc = new Document({
+                    creator: '语音识别工具',
+                    title: '语音识别结果',
+                    sections: [{
+                        properties: {},
+                        children: [
+                            // 标题
+                            new Paragraph({
+                                children: [
+                                    new TextRun({
+                                        text: `语音识别结果 - ${fileName.textContent || audioFile.files[0].name}`,
+                                        bold: true,
+                                        fontSize: 24,
+                                    })
+                                ]
+                            }),
+                            // 时间
+                            new Paragraph({
+                                children: [
+                                    new TextRun({
+                                        text: `识别时间：${new Date().toLocaleString()}`,
+                                        fontSize: 18,
+                                        color: '666666'
+                                    })
+                                ]
+                            }),
+                            // 空行
+                            new Paragraph({ children: [new TextRun({ text: '\n' })] }),
+                            // 识别内容
+                            ...segments.map((segment, idx) => {
+                                const spkId = segment.spk || segment.speaker || `说话人${idx+1}`;
+                                const text = segment.text || "无文本内容";
+                                return [
+                                    // 说话人标签
+                                    new Paragraph({
+                                        children: [
+                                            new TextRun({
+                                                text: `片段${idx+1}：${spkId}`,
+                                                bold: true,
+                                                color: '0070c0',
+                                                fontSize: 20,
+                                            })
+                                        ]
+                                    }),
+                                    // 文本内容
+                                    new Paragraph({
+                                        children: [
+                                            new TextRun({
+                                                text: text,
+                                                fontSize: 18,
+                                                spacing: { line: 360 } // 1.8倍行间距
+                                            })
+                                        ]
+                                    }),
+                                    // 段间距
+                                    new Paragraph({ children: [new TextRun({ text: '\n' })] })
+                                ];
+                            }).flat()
+                        ]
+                    }]
+                });
+
+                // 3. 打包并下载（6.0.0版本核心兼容逻辑）
+                const buffer = await Packer.toBuffer(doc);
+                const blob = new Blob([buffer], {
+                    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                });
+                const docName = `${fileName.textContent || '识别结果'}_${new Date().getTime()}.docx`;
+                saveAs(blob, docName);
+                
+            } catch (err) {
+                console.error('Word生成失败详情：', err);
+                alert(`导出Word失败：${err.message}\n请检查控制台查看详细错误`);
+            }
+        }
+
+        // 识别按钮点击事件
+        recognizeBtn.addEventListener('click', async () => {
+            // 重置状态
+            errorMsg.style.display = 'none';
+            resultArea.style.display = 'none';
+            transcriptionResult.innerHTML = '';
+            globalResultData = null;
+
+            // 校验文件
+            if (!audioFile.files.length) {
+                errorMsg.textContent = '请先选择音频文件！';
+                errorMsg.style.display = 'block';
+                return;
+            }
+
+            // 构建请求数据
+            const formData = new FormData();
+            formData.append('file', audioFile.files[0]);
+            formData.append('batch_size_s', 300); // 传递批量处理参数
+            if (hotword.value.trim()) {
+                formData.append('hotword', hotword.value.trim());
+            }
+
+            // 禁用按钮，显示加载
+            recognizeBtn.disabled = true;
+            loading.style.display = 'block';
+
+            try {
+                // 发送请求（增加超时和错误处理）
+                const response = await fetch('http://localhost:8000/asr', {
+                    method: 'POST',
+                    body: formData,
+                    timeout: 300000 // 5分钟超时（CPU处理慢）
+                });
+
+                if (!response.ok) {
+                    throw new Error(`请求失败：${response.status} ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                
+                // 设置文件名
+                fileName.textContent = result.filename || audioFile.files[0].name;
+                
+                // 渲染结果（调用修复后的解析函数）
+                renderResult(result);
+                
+                // 显示结果区域
+                resultArea.style.display = 'block';
+
+            } catch (err) {
+                // 错误提示
+                errorMsg.textContent = `识别失败：${err.message}`;
+                errorMsg.style.display = 'block';
+                console.error('详细错误：', err); // 控制台输出详细错误，便于调试
+            } finally {
+                // 恢复按钮状态
+                recognizeBtn.disabled = false;
+                loading.style.display = 'none';
+            }
+        });
+
+        // 绑定导出Word按钮事件
+        exportWordBtn.addEventListener('click', generateWordDocument);
+    </script>
+</body>
+</html>
