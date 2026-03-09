@@ -1,0 +1,403 @@
+/* 全局重置 & 基础样式 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+}
+
+#app {
+  height: 100%;
+}
+
+/* 页面主容器 */
+.tencent-meeting-page {
+  width: 100%;
+  height: 100vh;
+  background: #f5f7fa;
+  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  overflow: auto;
+}
+
+/* 顶部导航栏 */
+.nav-bar {
+  height: 60px;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 24px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.nav-bar .logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 500;
+  color: #1d2129;
+}
+
+.nav-bar .logo i {
+  color: #0066cc;
+  font-size: 20px;
+}
+
+.nav-bar .nav-actions {
+  display: flex;
+  gap: 16px;
+}
+
+/* 主内容容器 - 核心布局修复 */
+.main-container {
+  display: flex;
+  height: calc(100vh - 60px);
+  width: 100%;
+}
+
+/* 左侧音频面板 - 修复宽度和显示 */
+.audio-panel {
+  width: 380px;
+  min-width: 380px; /* 固定最小宽度，防止被挤压 */
+  background: #fff;
+  border-right: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.audio-panel .panel-header h3 {
+  font-size: 16px;
+  color: #1d2129;
+  margin: 0 0 16px 0;
+  font-weight: 500;
+}
+
+/* 音频播放器 */
+.audio-player {
+  width: 100%;
+  margin-bottom: 24px;
+}
+
+.audio-player .audio-core {
+  width: 100%;
+  margin-bottom: 12px;
+  height: 40px;
+}
+
+.audio-player .timeline-container {
+  width: 100%;
+}
+
+.audio-player .timeline-container .timeline {
+  position: relative;
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 3px;
+  cursor: pointer;
+  margin-bottom: 8px;
+  user-select: none;
+}
+
+.audio-player .timeline-container .timeline .progress {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: #0066cc;
+  border-radius: 3px;
+  z-index: 1;
+}
+
+.audio-player .timeline-container .timeline .time-mark {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: #ff7d00;
+  z-index: 2;
+  cursor: pointer;
+}
+
+.audio-player .timeline-container .timeline .time-mark.active {
+  background: #ff4d4f;
+  height: 10px;
+  top: -2px;
+  border-radius: 1px;
+}
+
+.audio-player .timeline-container .time-text {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #86909c;
+}
+
+/* 上传区域 */
+.upload-area {
+  width: 100%;
+}
+
+.upload-area .upload-box {
+  border: 1px dashed #dcdfe6;
+  border-radius: 6px;
+  padding: 24px;
+  text-align: center;
+  margin-bottom: 16px;
+  background: #f9fafc;
+}
+
+.upload-area .tips {
+  font-size: 12px;
+  color: #86909c;
+  margin-top: 8px;
+}
+
+.upload-area .action-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+/* 右侧内容面板 - 修复布局 */
+.content-panel {
+  flex: 1; /* 占满剩余宽度 */
+  padding: 20px;
+  overflow: auto;
+}
+
+.content-panel .content-tabs {
+  height: 100%;
+  width: 100%;
+}
+
+.content-panel .content-tabs .el-tabs__content {
+  height: calc(100% - 40px);
+  overflow: auto; /* 保持 hidden，让 summary-container 自己滚动 */
+  width: 100%;
+}
+
+/* 转写结果容器 */
+.transcript-container {
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+}
+
+/* 固定的标题栏 */
+.transcript-container .transcript-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  /* 关键：固定标题栏，不随滚动区压缩/移动 */
+  flex-shrink: 0;
+  /* 可选：加底部边框，区分标题和内容 */
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.transcript-container .transcript-header h4 {
+  font-size: 15px;
+  color: #1d2129;
+  /* 关键：固定标题栏，不随滚动区压缩/移动 */
+  flex-shrink: 0;
+  margin: 0;
+  font-weight: 500;
+}
+
+/* 滚动的内容区 */
+.transcript-container .transcript-scroll-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 8px;
+  pointer-events: auto;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 0;
+}
+
+::-webkit-scrollbar {
+  -webkit-appearance: none;
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  cursor: pointer;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.15);
+  transition: color 0.2s ease;
+}
+
+.transcript-container .transcript-scroll-wrapper::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.transcript-container .transcript-scroll-wrapper::-webkit-scrollbar-track {
+  background: #f8f8f8;
+  border-radius: 4px;
+}
+
+.transcript-container .transcript-scroll-wrapper::-webkit-scrollbar-thumb {
+  background: #dcdfe6;
+  border-radius: 4px;
+}
+
+.transcript-container .transcript-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #c0c4cc;
+}
+
+.transcript-container .transcript-scroll-wrapper .transcript-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.transcript-container .transcript-scroll-wrapper .transcript-list .transcript-item {
+  padding: 12px 16px;
+  border-radius: 6px;
+  background: #f9fafc;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+  box-sizing: border-box;
+  pointer-events: auto;
+}
+
+.transcript-container .transcript-scroll-wrapper .transcript-list .transcript-item:hover {
+  background: #f0f5ff;
+}
+
+.transcript-container .transcript-scroll-wrapper .transcript-list .transcript-item.highlight {
+  background: #e6f7ff;
+  border-left: 4px solid #0066cc;
+}
+
+.transcript-container .transcript-scroll-wrapper .transcript-list .transcript-item .item-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.transcript-container .transcript-scroll-wrapper .transcript-list .transcript-item .item-header .speaker-tag {
+  color: #0066cc;
+  font-weight: 500;
+}
+
+.transcript-container .transcript-scroll-wrapper .transcript-list .transcript-item .item-header .time-tag {
+  color: #86909c;
+}
+
+.transcript-container .transcript-scroll-wrapper .transcript-list .transcript-item .item-content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #1d2129;
+  word-wrap: break-word;
+  word-break: break-all;
+}
+
+.transcript-container .transcript-scroll-wrapper .transcript-list .empty-tip {
+  text-align: center;
+  color: #86909c;
+  font-size: 14px;
+  padding: 40px 0;
+}
+
+/* 会议纪要容器 */
+.summary-container {
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+}
+
+.summary-container .summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-shrink: 0; /* 防止标题栏被压缩 */
+}
+
+.summary-container .summary-header h4 {
+  font-size: 15px;
+  color: #1d2129;
+  margin: 0;
+  font-weight: 500;
+}
+
+.summary-container .summary-content {
+  flex: 1; /* 关键：占满剩余高度，让滚动生效 */
+  overflow-y: auto; /* 关键：允许垂直滚动 */
+  overflow-x: hidden;
+  padding: 16px;
+  background: #f9fafc;
+  border-radius: 6px;
+}
+
+.summary-container .summary-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.summary-container .summary-content::-webkit-scrollbar-track {
+  background: #f8f8f8;
+  border-radius: 4px;
+}
+
+.summary-container .summary-content::-webkit-scrollbar-thumb {
+  background: #dcdfe6;
+  border-radius: 4px;
+}
+
+.summary-container .summary-content::-webkit-scrollbar-thumb:hover {
+  background: #c0c4cc;
+}
+
+
+.summary-container .summary-content pre {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #1d2129;
+  white-space: pre-wrap;
+  margin: 0;
+  font-family: inherit;
+}
+
+.summary-container .summary-content .empty-tip {
+  text-align: center;
+  color: #86909c;
+  font-size: 14px;
+  padding: 40px 0;
+}
+
+/* 滚动条全局样式 */
+* {
+  scrollbar-width: auto;
+  -ms-overflow-style: auto;
+}
