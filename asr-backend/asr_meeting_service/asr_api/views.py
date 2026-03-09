@@ -15,6 +15,176 @@ import time
 import uuid
 from datetime import datetime
 import traceback
+from .utils import extract_audio_from_video, generate_srt_subtitle
+
+# ------------------- 视频上传+语音转写+字幕生成接口 -------------------
+@method_decorator(csrf_exempt, name='dispatch')
+class VideoASRTranscribeView(APIView):
+    def post(self, request):
+        """
+        视频上传接口：提取音频→ASR转写→生成SRT字幕
+        返回：转写文本 + 字幕文件下载链接
+        """
+        temp_video = None
+        temp_audio = None
+        try:
+            # 1. 校验文件是否上传
+            if 'file' not in request.FILES:
+                return Response(
+                    {"status": "failed", "detail": "未上传视频文件"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            file = request.FILES['file']
+            # 2. 校验视频格式
+            if not file.name.lower().endswith(settings.ALLOWED_VIDEO_EXTENSIONS):
+                return Response(
+                    {"status": "failed", "detail": f"仅支持以下视频格式：{settings.ALLOWED_VIDEO_EXTENSIONS}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 3. 保存临时视频文件
+            video_filename = f"temp_video_{datetime.now().strftime('%Y%m%d%H%M%S_%f')}_{file.name}"
+            temp_video = os.path.join(settings.TEMP_DIR, video_filename)
+            with open(temp_video, "wb") as f:
+                for chunk in file.chunks():
+                    f.write(chunk)
+            
+            # 4. 提取音频（WAV格式）
+            audio_filename = f"temp_audio_{uuid.uuid4()}.wav"
+            temp_audio = os.path.join(settings.TEMP_DIR, audio_filename)
+            if not extract_audio_from_video(temp_video, temp_audio):
+                return Response(
+                    {"status": "failed", "detail": "视频音频提取失败"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+            # 5. 解析请求参数（同音频接口）
+            batch_size_s = request.POST.get("batch_size_s", "")
+            # 空值/非数字容错：转为整数，失败则用默认值300
+            try:
+                batch_size_s = int(batch_size_s.strip()) if batch_size_s.strip() else 300
+            except (ValueError, TypeError):
+                batch_size_s = 300
+            hotword = request.POST.get("hotword", None)
+            
+            # 6. 调用ASR模型处理提取的音频（增加异常捕获+降级）
+            from .models import asr_model
+            print(f"{datetime.now()} - 开始处理视频音频: {file.name}")
+            try:
+                result = asr_model.generate(
+                    input=temp_audio,
+                    batch_size_s=batch_size_s,
+                    hotword=hotword,
+                    punc=True,
+                    spk_segment=True,  # 说话人识别（易触发异常）
+                    merge_vad=True,
+                    max_single_segment_time=30
+                )
+            except IndexError as e:
+                # 说话人识别失败，降级为仅转写（关闭spk_segment）
+                print(f"{datetime.now()} - 说话人识别失败，降级为纯文本转写：{str(e)}")
+                result = asr_model.generate(
+                    input=temp_audio,
+                    batch_size_s=batch_size_s,
+                    hotword=hotword,
+                    punc=True,
+                    spk_segment=False,  # 关闭说话人识别
+                    merge_vad=True,
+                    max_single_segment_time=30
+                )
+            except Exception as e:
+                # 其他ASR模型异常
+                print(f"{datetime.now()} - ASR模型调用失败：{str(e)}")
+                return Response(
+                    {"status": "failed", "detail": f"ASR模型处理失败：{str(e)}"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+            # 7. 格式化转写结果（带时间戳）
+            formatted_result = []
+            if result and len(result) > 0:
+                sentence_info = result[0].get("sentence_info", [])
+                if sentence_info:
+                    for segment in sentence_info:
+                        formatted_result.append({
+                            "spk": segment.get("spk", "未知说话人"),
+                            "text": segment.get("text", "").strip(),
+                            "start_time": round(segment.get("start", 0) / 1000, 2),
+                            "end_time": round(segment.get("end", 0) / 1000, 2)
+                        })
+                elif "value" in result[0]:
+                    for segment in result[0]["value"]:
+                        formatted_result.append({
+                            "spk": segment.get("spk", "未知说话人"),
+                            "text": segment.get("text", "").strip(),
+                            "start_time": round(segment.get("start", 0) / 1000, 2),
+                            "end_time": round(segment.get("end", 0) / 1000, 2)
+                        })
+            
+            if not formatted_result:
+                formatted_result = [{
+                    "spk": "未知说话人",
+                    "text": "未识别到有效语音内容",
+                    "start_time": 0.00,
+                    "end_time": 0.00
+                }]
+            
+            # # 8. 生成SRT字幕文件
+            # srt_filename = f"subtitle_{uuid.uuid4()}.srt"
+            # srt_path = os.path.join(settings.SUBTITLE_DIR, srt_filename)
+            # generate_srt_subtitle(formatted_result, srt_path)
+            
+            # # 9. 构建字幕文件下载链接（需配置静态文件/媒体文件访问）
+            # # 生产环境建议使用nginx代理subtitle_files目录，此处简化为相对路径
+            # subtitle_download_url = f"/download_subtitle/{srt_filename}"
+            
+            # 10. 返回结果
+            return Response({
+                "status": "success",
+                "filename": file.name,
+                "transcription": formatted_result,
+                # "subtitle_download_url": subtitle_download_url,
+                "note": "已完成视频音频提取+ASR转写+SRT字幕生成",
+                "timestamp": datetime.now().isoformat()
+            })
+        
+        except Exception as e:
+            traceback.print_exc()
+            return Response(
+                {"status": "failed", "detail": f"视频处理失败：{str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        finally:
+            # 清理临时文件
+            for temp_file in [temp_video, temp_audio]:
+                if temp_file and os.path.exists(temp_file):
+                    try:
+                        os.remove(temp_file)
+                        print(f"{datetime.now()} - 临时文件 {temp_file} 已删除")
+                    except Exception as e:
+                        print(f"{datetime.now()} - 临时文件删除失败：{str(e)}")
+
+# ------------------- 字幕文件下载接口 -------------------
+class SubtitleDownloadView(APIView):
+    def get(self, request, srt_filename):
+        """下载SRT字幕文件"""
+        srt_path = os.path.join(settings.SUBTITLE_DIR, srt_filename)
+        if not os.path.exists(srt_path):
+            return Response(
+                {"status": "failed", "detail": "字幕文件不存在"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # 返回文件下载响应
+        response = FileResponse(
+            open(srt_path, 'rb'),
+            filename=srt_filename,
+            content_type="text/plain; charset=utf-8"
+        )
+        # 可选：设置下载头
+        response['Content-Disposition'] = f'attachment; filename="{srt_filename}"'
+        return response
 
 # 初始化LLM客户端
 llm_client = OpenAI(
@@ -66,18 +236,37 @@ class ASRTranscribeView(APIView):
             batch_size_s = int(request.POST.get("batch_size_s", 300))
             hotword = request.POST.get("hotword", None)
             
-            # 5. 调用ASR模型
+            # 5. 调用ASR模型（增加异常捕获+降级）
             from .models import asr_model
             print(f"{datetime.now()} - 开始处理音频文件: {file.name}")
-            result = asr_model.generate(
-                input=temp_file,
-                batch_size_s=batch_size_s,
-                hotword=hotword,
-                punc=True,
-                spk_segment=True,
-                merge_vad=True,
-                max_single_segment_time=30
-            )
+            try:
+                result = asr_model.generate(
+                    input=temp_file,
+                    batch_size_s=batch_size_s,
+                    hotword=hotword,
+                    punc=True,
+                    spk_segment=True,
+                    merge_vad=True,
+                    max_single_segment_time=30
+                )
+            except IndexError as e:
+                # 说话人识别失败，降级为纯文本转写
+                print(f"{datetime.now()} - 说话人识别失败，降级为纯文本转写：{str(e)}")
+                result = asr_model.generate(
+                    input=temp_file,
+                    batch_size_s=batch_size_s,
+                    hotword=hotword,
+                    punc=True,
+                    spk_segment=False,  # 关闭说话人识别
+                    merge_vad=True,
+                    max_single_segment_time=30
+                )
+            except Exception as e:
+                print(f"{datetime.now()} - ASR模型调用失败：{str(e)}")
+                return Response(
+                    {"status": "failed", "detail": f"ASR模型处理失败：{str(e)}"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
             
             # 6. 格式化结果（新增 start_time + end_time）
             formatted_result = []

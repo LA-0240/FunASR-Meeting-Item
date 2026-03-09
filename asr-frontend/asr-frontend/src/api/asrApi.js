@@ -51,3 +51,13 @@ export const exportAbstractWord = async (abstract_text, file_name) => {
     { responseType: 'blob', timeout: 60000 }
   )
 }
+
+// 视频ASR转写
+export const requestVideoASR = async (formData) => {
+  return axios.post('/video_asr', formData)
+}
+
+// 下载字幕
+export const downloadSubtitleApi = (url) => {
+  return axios.get(url, { responseType: 'blob' })
+}

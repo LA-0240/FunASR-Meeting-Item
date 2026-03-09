@@ -20,34 +20,42 @@
           <h3>音频播放</h3>
         </div>
         
-        <!-- 音频播放器 -->
+        <!-- 音频/视频播放器 → 自动切换 -->
         <div class="audio-player">
-          <audio 
-            ref="audioRef" 
-            controls 
-            @timeupdate="() => handleTimeUpdate(transcriptionResult)" 
+          <!-- 视频播放器 -->
+          <video
+            v-if="fileType === 'video'"
+            ref="videoRef"
+            controls
+            class="video-player"
+            @timeupdate="handleTimeUpdate"
+            @loadedmetadata="handleVideoLoadedMetadata"
+            @error="handleVideoError"
+          ></video>
+          <!-- 音频播放器 -->
+          <audio
+            v-else
+            ref="audioRef"
+            controls
+            class="audio-core"
+            @timeupdate="handleTimeUpdate"
             @loadedmetadata="handleLoadedMetadata"
             @error="handleAudioError"
-            class="audio-core"
-            controlsList="nodownload"
           >
-            您的浏览器不支持HTML5音频播放，请升级浏览器
+            您的浏览器不支持音频播放
           </audio>
-          
+
+          <!-- 时间轴（不动） -->
           <div class="timeline-container">
             <div class="timeline" ref="timelineRef" @click="handleTimelineClick">
-              <div 
-                class="progress" 
-                :style="{ width: progressPercent + '%' }"
-              ></div>
-              <div 
-                class="time-mark" 
-                v-for="(item, idx) in transcriptionResult" 
+              <div class="progress" :style="{ width: progressPercent + '%' }"></div>
+              <div
+                class="time-mark"
+                v-for="(item, idx) in transcriptionResult"
                 :key="idx"
                 :style="{ left: getTimeMarkPosition(item.start_time, audioDuration) + '%' }"
                 @click.stop="jumpToTime(item.start_time)"
                 :class="{ active: currentTime >= item.start_time && currentTime <= item.end_time }"
-                title="点击跳转到该段语音"
               ></div>
             </div>
             <div class="time-text">
@@ -65,19 +73,36 @@
             :auto-upload="false"
             :on-change="handleFileChange"
             :file-list="fileList"
-            accept=".wav,.mp3,.ogg,.flac"
+            accept=".wav,.mp3,.ogg,.flac,.mp4,.avi,.mov,.mkv,.flv,.wmv"
             class="upload-box"
             :before-upload="beforeUpload"
           >
             <i class="el-icon-upload"></i>
             <div class="el-upload__text">拖拽音频文件至此</div>
-            <div class="tips">支持 .wav / .mp3 / .ogg / .flac</div>
+            <div class="tips">支持 .wav / .mp3 / .ogg / .flac / .mp4 / .avi / .mov / .mkv / .flv / .wmv</div>
           </el-upload>
 
           <div class="action-buttons">
-            <el-button type="primary" :loading="asrLoading" @click="handleASR">
-              <i class="el-icon-microphone"></i> 开始转写
+            <!-- 音频转写：上传视频时禁用 -->
+            <el-button 
+              type="primary" 
+              :loading="asrLoading" 
+              @click="handleASR"
+              :disabled="fileType === 'video'"
+            >
+              <i class="el-icon-microphone"></i> 音频转写
             </el-button>
+
+            <!-- 视频转写：上传音频时禁用 -->
+            <el-button 
+              type="success" 
+              :loading="videoAsrLoading" 
+              @click="handleVideoASR"
+              :disabled="fileType === 'audio'"
+            >
+              <i class="el-icon-video-play"></i> 视频转写
+            </el-button>
+
             <el-button 
               :disabled="!transcriptionResult.length" 
               :loading="summaryLoading" 
@@ -105,6 +130,15 @@
                 <h4>语音转写结果（{{ transcriptionResult.length }}段）</h4>
                 <el-button size="small" @click="exportTranscriptionWordHandler">
                   <i class="el-icon-download"></i> 导出Word
+                </el-button>
+                <!-- 新增：下载SRT字幕 -->
+                <el-button 
+                  size="small" 
+                  type="warning"
+                  :disabled="!subtitleDownloadUrl"
+                  @click="downloadSubtitle"
+                >
+                  <i class="el-icon-download"></i> 下载字幕
                 </el-button>
               </div>
               
@@ -176,12 +210,14 @@
 <script setup>
 import { useAudio } from '@/composables/useAudio'
 import { useASR } from '@/composables/useASR'
+import { useVideoASR } from '@/composables/useVideoASR'
 import { useSummary } from '@/composables/useSummary'
 import '@/styles/HomeView.scss'
 
 // 音频控制逻辑
 const {
   audioRef,
+  videoRef,
   timelineRef,
   scrollWrapperRef,
   audioDuration,
@@ -189,30 +225,50 @@ const {
   progressPercent,
   fileList,
   currentFile,
+  fileType,
   formatTime,
   getTimeMarkPosition,
   handleLoadedMetadata,
   handleAudioError,
+  handleVideoLoadedMetadata, // 👈 必须有
+  handleVideoError,
   beforeUpload,
   handleFileChange,
   handleTimeUpdate,
   handleTimelineClick,
-  jumpToTime
+  jumpToTime,
 } = useAudio()
 
-// 语音转写逻辑
+// 音频转写（重命名，避免冲突）
 const {
   asrLoading,
-  transcriptionResult,
-  transcriptionText,
+  transcriptionResult: audioTransResult,
+  transcriptionText: audioTransText,
   handleASR
 } = useASR(currentFile)
 
-// 会议摘要逻辑
+// 视频转写（重命名，避免冲突）
+const {
+  videoAsrLoading,
+  transcriptionResult: videoTransResult,
+  transcriptionText: videoTransText,
+  subtitleDownloadUrl,
+  handleVideoASR
+} = useVideoASR(currentFile)
+
+// 统一对外暴露：音频/视频共用一套视图变量
+import { computed } from 'vue'
+const transcriptionResult = computed(() => {
+  return videoTransResult.value.length > 0 ? videoTransResult.value : audioTransResult.value
+})
+const transcriptionText = computed(() => {
+  return videoTransText.value || audioTransText.value
+})
+
+// 会议摘要逻辑（现在正常传入 subtitleDownloadUrl）
 const {
   summaryLoading,
   summaryResult,
-  // 新增摘要相关
   abstractLoading,
   abstractResult,
   activeTab,
@@ -220,6 +276,7 @@ const {
   handleGenerateAbstract,
   exportTranscriptionWordHandler,
   exportSummaryWordHandler,
-  exportAbstractWordHandler
-} = useSummary(transcriptionText, currentFile)
+  exportAbstractWordHandler,
+  downloadSubtitle
+} = useSummary(transcriptionText, currentFile, subtitleDownloadUrl)
 </script>

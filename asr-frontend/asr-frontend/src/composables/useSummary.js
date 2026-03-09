@@ -9,21 +9,19 @@ import {
 } from '@/api/asrApi'
 import { exportBlobToFile } from '@/utils/fileExport'
 
-export const useSummary = (transcriptionText, currentFile) => {
+// 接收 subtitleDownloadUrl 从父组件传入
+export const useSummary = (transcriptionText, currentFile, subtitleDownloadUrl) => {
   // 会议纪要
   const summaryLoading = ref(false)
   const summaryResult = ref('')
-
   // 会议摘要
   const abstractLoading = ref(false)
   const abstractResult = ref('')
-
   const activeTab = ref('transcript')
 
   // 生成会议纪要
   const handleGenerateSummary = async () => {
     if (!transcriptionText.value) return ElMessage.warning('请先完成语音转写！')
-
     summaryLoading.value = true
     try {
       const response = await requestSummary(transcriptionText.value)
@@ -66,7 +64,6 @@ export const useSummary = (transcriptionText, currentFile) => {
   // 导出转写结果Word
   const exportTranscriptionWordHandler = async () => {
     if (!transcriptionText.value) return ElMessage.warning('暂无转写内容可导出！')
-
     try {
       const fileNamePrefix = currentFile.value.name.replace(/\.\w+$/, '')
       const response = await exportTranscriptionWord(transcriptionText.value, fileNamePrefix)
@@ -82,7 +79,6 @@ export const useSummary = (transcriptionText, currentFile) => {
   // 导出会议纪要Word
   const exportSummaryWordHandler = async () => {
     if (!summaryResult.value) return ElMessage.warning('暂无纪要可导出！')
-
     try {
       const fileNamePrefix = currentFile.value.name.replace(/\.\w+$/, '')
       const response = await exportSummaryWord(summaryResult.value, fileNamePrefix)
@@ -96,7 +92,7 @@ export const useSummary = (transcriptionText, currentFile) => {
   }
 
   // 导出会议摘要Word
-    const exportAbstractWordHandler = async () => {
+  const exportAbstractWordHandler = async () => {
     if (!abstractResult.value) return ElMessage.warning('暂无摘要可导出！')
     try {
       const fileNamePrefix = currentFile.value.name.replace(/\.\w+$/, '')
@@ -110,10 +106,19 @@ export const useSummary = (transcriptionText, currentFile) => {
     }
   }
 
+  // 新增：下载SRT字幕
+  const downloadSubtitle = () => {
+    if (!subtitleDownloadUrl.value) return ElMessage.warning('暂无字幕可下载！')
+    const a = document.createElement('a')
+    a.href = subtitleDownloadUrl.value
+    a.download = ''
+    a.click()
+    ElMessage.success('字幕下载开始')
+  }
+
   return {
     summaryLoading,
     summaryResult,
-    // 摘要返回
     abstractLoading,
     abstractResult,
     activeTab,
@@ -121,6 +126,7 @@ export const useSummary = (transcriptionText, currentFile) => {
     handleGenerateAbstract,
     exportTranscriptionWordHandler,
     exportSummaryWordHandler,
-    exportAbstractWordHandler
+    exportAbstractWordHandler,
+    downloadSubtitle // 导出方法
   }
 }

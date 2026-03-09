@@ -24,7 +24,9 @@ from asr_api.views import (
     MeetingAbstractView,
     ExportTranscriptionWordView,
     ExportSummaryWordView,
-    ExportAbstractWordView
+    ExportAbstractWordView,
+    VideoASRTranscribeView,  # 新增
+    SubtitleDownloadView     # 新增
 )
 
 urlpatterns = [
@@ -33,6 +35,10 @@ urlpatterns = [
     path('', HealthCheckView.as_view(), name='health-check'),
     # ASR语音转文字
     path('asr', ASRTranscribeView.as_view(), name='asr-transcribe'),
+     # 视频ASR接口（新增）
+    path('video_asr', VideoASRTranscribeView.as_view(), name='video-asr-transcribe'),
+    # 字幕下载接口（新增）
+    path('download_subtitle/<str:srt_filename>', SubtitleDownloadView.as_view(), name='download-subtitle'),
     # 会议纪要生成
     path('generate_summary', MeetingSummaryView.as_view(), name='generate-summary'),
     # 会议摘要（新增）

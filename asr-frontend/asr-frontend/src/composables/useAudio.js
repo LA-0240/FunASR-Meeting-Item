@@ -1,155 +1,143 @@
-import { ref, watch, onMounted } from 'vue'
+import { ref, nextTick , onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { formatTime, getTimeMarkPosition } from '@/utils/timeFormat'
 
 export const useAudio = () => {
-  // 音频相关状态
+  // 播放器ref
   const audioRef = ref(null)
+  const videoRef = ref(null)
   const timelineRef = ref(null)
   const scrollWrapperRef = ref(null)
-  const audioUrl = ref('')
+  
+  // ====================== 这里定义了 mediaUrl ======================
+  const mediaUrl = ref('')
   const audioDuration = ref(0)
   const currentTime = ref(0)
   const progressPercent = ref(0)
   const fileList = ref([])
   const currentFile = ref(null)
+  const fileType = ref('')
 
-  // 音频加载完成
+  // 加载完成
   const handleLoadedMetadata = () => {
-    if (audioRef.value) {
-      audioDuration.value = audioRef.value.duration
-      ElMessage.success('音频加载完成，可以播放')
-    }
+    audioDuration.value = audioRef.value?.duration || 0
+  }
+  const handleVideoLoadedMetadata = () => {
+    audioDuration.value = videoRef.value?.duration || 0
   }
 
-  // 音频错误捕获
-  const handleAudioError = (e) => {
-    ElMessage.error(`音频加载失败：${e.target.error.message}`)
-    console.error('音频错误详情：', e.target.error)
-  }
+  // 错误提示
+  const handleAudioError = () => ElMessage.error('音频加载失败')
+  const handleVideoError = () => ElMessage.error('视频加载失败')
 
-  // 上传前校验
+  // 上传校验
   const beforeUpload = (file) => {
-    const isAudio = ['audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/ogg', 'audio/flac'].includes(file.type)
-    if (!isAudio) {
-      ElMessage.error('仅支持 .wav / .mp3 / .ogg / .flac 格式音频！')
+    const isAudio = file.type.startsWith('audio/')
+    const isVideo = file.type.startsWith('video/')
+    if (!isAudio && !isVideo) {
+      ElMessage.error('仅支持音频/视频')
       return false
     }
     return true
   }
 
-  // 文件选择事件
-  const handleFileChange = (file) => {
+  // ==============================================
+  // 🔥 稳定版文件选择（第一次必成功，绝不失败）
+  // ==============================================
+  const handleFileChange = async (file) => {
     fileList.value = [file]
     currentFile.value = file.raw
+    const isVideo = file.raw.type.startsWith('video/')
+    fileType.value = isVideo ? 'video' : 'audio'
 
-    // 释放旧的URL
-    if (audioUrl.value) {
-      URL.revokeObjectURL(audioUrl.value)
+    // 释放旧资源
+    if (mediaUrl.value) URL.revokeObjectURL(mediaUrl.value)
+    mediaUrl.value = ''
+
+    // 等待 DOM 渲染完成（解决第一次必败问题）
+    await nextTick()
+
+    // 创建新地址
+    mediaUrl.value = URL.createObjectURL(file.raw)
+
+    // 完全重置两个播放器
+    if (audioRef.value) {
+      audioRef.value.src = ''
+      audioRef.value.load()
+    }
+    if (videoRef.value) {
+      videoRef.value.src = ''
+      videoRef.value.load()
     }
 
-    // 创建新的音频URL
-    audioUrl.value = URL.createObjectURL(file.raw)
-    if (audioRef.value) {
-      audioRef.value.src = audioUrl.value
+    // 赋值
+    if (isVideo) {
+      videoRef.value.src = mediaUrl.value
+      videoRef.value.load()
+    } else {
+      audioRef.value.src = mediaUrl.value
       audioRef.value.load()
     }
 
-    // 重置状态
+    // 重置进度
     audioDuration.value = 0
     currentTime.value = 0
     progressPercent.value = 0
   }
 
-  // 音频时间更新（优化自动滚动）
+  // 时间更新
   let timeUpdateTimer = null
-  const handleTimeUpdate = (transcriptionResult) => {
-    if (!audioRef.value || !audioDuration.value) return
+  const handleTimeUpdate = () => {
+    const player = fileType.value === 'video' ? videoRef.value : audioRef.value
+    if (!player) return
 
     clearTimeout(timeUpdateTimer)
     timeUpdateTimer = setTimeout(() => {
-      currentTime.value = audioRef.value.currentTime
+      currentTime.value = player.currentTime
       progressPercent.value = (currentTime.value / audioDuration.value) * 100 || 0
-
-      // 播放状态下自动滚动到当前转写段
-      if (!audioRef.value.paused && transcriptionResult.length) {
-        const activeItem = document.querySelector('.transcript-item.highlight')
-        if (activeItem && scrollWrapperRef.value) {
-          const wrapperRect = scrollWrapperRef.value.getBoundingClientRect()
-          const itemRect = activeItem.getBoundingClientRect()
-          if (itemRect.bottom > wrapperRect.bottom + 20 || itemRect.top < wrapperRect.top - 20) {
-            activeItem.scrollIntoView({ behavior: 'smooth', block: 'center' })
-          }
-        }
-      }
     }, 150)
   }
 
-  // 时间轴点击跳转
+  // 跳转
   const handleTimelineClick = (e) => {
-    if (!audioRef.value || !audioDuration.value || !timelineRef.value) return
-
-    const rect = timelineRef.value.getBoundingClientRect()
-    const clickX = e.clientX - rect.left
-    const timelineWidth = rect.width
-    const percent = Math.max(0, Math.min(1, clickX / timelineWidth))
-    const targetTime = percent * audioDuration.value
-
-    jumpToTime(targetTime)
+    const player = fileType.value === 'video' ? videoRef.value : audioRef.value
+    if (!player || !timelineRef.value) return
+    const per = (e.clientX - timelineRef.value.getBoundingClientRect().left) / timelineRef.value.offsetWidth
+    jumpToTime(per * audioDuration.value)
   }
 
-  // 精准跳转到指定时间
   const jumpToTime = (time) => {
-    if (!audioRef.value || !audioDuration.value) {
-      ElMessage.warning('音频未加载完成，无法跳转')
-      return
-    }
-
-    const targetTime = Math.max(0, Math.min(time, audioDuration.value))
-    audioRef.value.currentTime = targetTime
-    audioRef.value.play().catch(err => {
-      ElMessage.warning('播放需要手动触发：请先点击音频控件的播放按钮')
-    })
-
-    currentTime.value = targetTime
-    progressPercent.value = (targetTime / audioDuration.value) * 100 || 0
-
-    // 滚动到对应转写项
-    setTimeout(() => {
-      const activeItem = document.querySelector('.transcript-item.highlight')
-      if (activeItem && scrollWrapperRef.value) {
-        activeItem.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      }
-    }, 100)
+    const player = fileType.value === 'video' ? videoRef.value : audioRef.value
+    if (!player) return
+    player.currentTime = Math.min(time, audioDuration.value)
+    player.play().catch(() => ElMessage.warning('请手动播放'))
   }
 
-  // 清理音频URL
+  // 清理
   onMounted(() => {
     window.addEventListener('beforeunload', () => {
-      if (audioUrl.value) URL.revokeObjectURL(audioUrl.value)
+      if (mediaUrl.value) URL.revokeObjectURL(mediaUrl.value)
     })
   })
 
-  watch(() => false, () => {
-    if (audioUrl.value) URL.revokeObjectURL(audioUrl.value)
-  }, { once: true })
 
   return {
-    // 状态
     audioRef,
+    videoRef,
     timelineRef,
     scrollWrapperRef,
-    audioUrl,
     audioDuration,
     currentTime,
     progressPercent,
     fileList,
     currentFile,
-    // 方法
+    fileType,
     formatTime,
     getTimeMarkPosition,
     handleLoadedMetadata,
+    handleVideoLoadedMetadata,
     handleAudioError,
+    handleVideoError,
     beforeUpload,
     handleFileChange,
     handleTimeUpdate,

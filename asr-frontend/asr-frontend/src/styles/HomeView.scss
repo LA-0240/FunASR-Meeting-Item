@@ -4,26 +4,23 @@
   padding: 0;
   box-sizing: border-box;
 }
-
 html, body {
   width: 100%;
   height: 100%;
   overflow: auto;
 }
-
 #app {
   height: 100%;
 }
-
-/* 页面主容器 */
+/* 页面主容器：原overflow: hidden会裁切左侧溢出内容，改为auto */
 .tencent-meeting-page {
   width: 100%;
   height: 100vh;
   background: #f5f7fa;
   font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
-  overflow: auto;
+  /* 改动：从hidden改为auto，允许页面整体滚动，避免左侧内容被裁切 */
+  overflow: auto; 
 }
-
 /* 顶部导航栏 */
 .nav-bar {
   height: 60px;
@@ -34,8 +31,9 @@ html, body {
   align-items: center;
   padding: 0 24px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  position: relative; /* 确保导航栏层级正常，不遮挡左侧 */
+  z-index: 10;
 }
-
 .nav-bar .logo {
   display: flex;
   align-items: center;
@@ -44,59 +42,79 @@ html, body {
   font-weight: 500;
   color: #1d2129;
 }
-
 .nav-bar .logo i {
   color: #0066cc;
   font-size: 20px;
 }
-
 .nav-bar .nav-actions {
   display: flex;
   gap: 16px;
 }
-
-/* 主内容容器 - 核心布局修复 */
+/* 主内容容器：原固定高度会限制左侧滚动，改为auto并允许溢出 */
 .main-container {
   display: flex;
-  height: calc(100vh - 60px);
+  /* 改动：从固定高度改为auto，让左侧可自然延伸 */
+  height: auto; 
+  min-height: calc(100vh - 60px); /* 保留最小高度，保证基础布局 */
   width: 100%;
+  position: relative;
+  /* 新增：允许主容器溢出，避免左侧内容被裁切 */
+  overflow: visible; 
 }
 
-/* 左侧音频面板 - 修复宽度和显示 */
+/* 左侧面板：强化层级 + 增加底部内边距（避免按钮贴底被遮挡） */
 .audio-panel {
-  width: 380px;
-  min-width: 380px; /* 固定最小宽度，防止被挤压 */
+  width: 340px;
+  min-width: 340px;
   background: #fff;
   border-right: 1px solid #e5e7eb;
   display: flex;
   flex-direction: column;
   padding: 20px;
   overflow-y: auto;
+  position: relative;
+  /* 强化：层级高于右侧，避免被右侧内容遮挡 */
+  z-index: 99; 
+  /* 增大底部内边距，确保按钮不被滚动条/容器边缘遮挡 */
+  padding-bottom: 60px; 
+  overflow-x: hidden;
+  /* 新增：确保左侧面板高度足够，按钮不被挤压 */
+  min-height: calc(100vh - 60px); 
 }
-
 .audio-panel .panel-header h3 {
   font-size: 16px;
   color: #1d2129;
   margin: 0 0 16px 0;
   font-weight: 500;
 }
-
-/* 音频播放器 */
+/* 播放器区域 */
 .audio-player {
   width: 100%;
   margin-bottom: 24px;
+  position: relative;
+  z-index: 1; /* 确保播放器内按钮层级正常 */
 }
-
+/* 音频保持小 */
 .audio-player .audio-core {
   width: 100%;
   margin-bottom: 12px;
   height: 40px;
+  /* 确保音频控件不被遮挡 */
+  position: relative;
+  z-index: 2;
 }
-
+/* 视频放大 */
+.audio-player .video-player {
+  width: 100%;
+  max-height: 320px;
+  border-radius: 8px;
+  object-fit: contain;
+  background: #000;
+  margin-bottom: 16px;
+}
 .audio-player .timeline-container {
   width: 100%;
 }
-
 .audio-player .timeline-container .timeline {
   position: relative;
   height: 6px;
@@ -106,7 +124,6 @@ html, body {
   margin-bottom: 8px;
   user-select: none;
 }
-
 .audio-player .timeline-container .timeline .progress {
   position: absolute;
   left: 0;
@@ -116,7 +133,6 @@ html, body {
   border-radius: 3px;
   z-index: 1;
 }
-
 .audio-player .timeline-container .timeline .time-mark {
   position: absolute;
   top: 0;
@@ -126,26 +142,34 @@ html, body {
   z-index: 2;
   cursor: pointer;
 }
-
 .audio-player .timeline-container .timeline .time-mark.active {
   background: #ff4d4f;
   height: 10px;
   top: -2px;
   border-radius: 1px;
 }
-
 .audio-player .timeline-container .time-text {
   display: flex;
   justify-content: space-between;
   font-size: 12px;
   color: #86909c;
 }
-
-/* 上传区域 */
-.upload-area {
-  width: 100%;
+/* 上传区域：核心调整 - 确保按钮可见且可点击 */
+.upload-area .action-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  padding: 12px 0; /* 增大上下内边距 */
+  min-height: 60px; /* 增大最小高度，避免按钮被压缩 */
+  align-items: center;
+  position: relative;
+  /* 强化：按钮层级最高，绝对不被遮挡 */
+  z-index: 999; 
+  /* 新增：防止按钮换行/裁切 */
+  flex-wrap: nowrap; 
+  /* 新增：确保按钮区域不被父元素溢出隐藏 */
+  overflow: visible; 
 }
-
 .upload-area .upload-box {
   border: 1px dashed #dcdfe6;
   border-radius: 6px;
@@ -154,38 +178,41 @@ html, body {
   margin-bottom: 16px;
   background: #f9fafc;
 }
-
 .upload-area .tips {
   font-size: 12px;
   color: #86909c;
   margin-top: 8px;
 }
-
 .upload-area .action-buttons {
   display: flex;
   gap: 12px;
   justify-content: center;
+  /* 关键：确保按钮不被裁切，增加最小高度和内边距 */
+  padding: 8px 0;
+  min-height: 48px;
+  align-items: center;
+  /* 确保按钮层级最高 */
+  position: relative;
+  z-index: 3;
 }
-
-/* 右侧内容面板 - 修复布局 */
+/* 右侧内容 */
 .content-panel {
-  flex: 1; /* 占满剩余宽度 */
+  flex: 1;
   padding: 20px;
   overflow: auto;
+  /* 右侧面板层级低于左侧，避免遮挡左侧按钮 */
+  z-index: 4;
 }
-
 .content-panel .content-tabs {
   height: 100%;
   width: 100%;
 }
-
 .content-panel .content-tabs .el-tabs__content {
   height: calc(100% - 40px);
-  overflow: auto; /* 保持 hidden，让 summary-container 自己滚动 */
+  overflow: auto;
   width: 100%;
 }
-
-/* 转写结果容器 */
+/* 下面全部保持你原来的不变 */
 .transcript-container {
   width: 100%;
   height: 100%;
@@ -197,30 +224,22 @@ html, body {
   display: flex;
   flex-direction: column;
 }
-
-/* 固定的标题栏 */
 .transcript-container .transcript-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
-  /* 关键：固定标题栏，不随滚动区压缩/移动 */
   flex-shrink: 0;
-  /* 可选：加底部边框，区分标题和内容 */
   padding-bottom: 8px;
   border-bottom: 1px solid #f0f0f0;
 }
-
 .transcript-container .transcript-header h4 {
   font-size: 15px;
   color: #1d2129;
-  /* 关键：固定标题栏，不随滚动区压缩/移动 */
   flex-shrink: 0;
   margin: 0;
   font-weight: 500;
 }
-
-/* 滚动的内容区 */
 .transcript-container .transcript-scroll-wrapper {
   flex: 1;
   overflow-y: auto;
@@ -228,51 +247,42 @@ html, body {
   padding-right: 8px;
   pointer-events: auto;
 }
-
 ::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.1);
   border-radius: 0;
 }
-
 ::-webkit-scrollbar {
   -webkit-appearance: none;
   width: 6px;
   height: 6px;
 }
-
 ::-webkit-scrollbar-thumb {
   cursor: pointer;
   border-radius: 5px;
   background: rgba(0, 0, 0, 0.15);
   transition: color 0.2s ease;
 }
-
 .transcript-container .transcript-scroll-wrapper::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
-
 .transcript-container .transcript-scroll-wrapper::-webkit-scrollbar-track {
   background: #f8f8f8;
   border-radius: 4px;
 }
-
 .transcript-container .transcript-scroll-wrapper::-webkit-scrollbar-thumb {
   background: #dcdfe6;
   border-radius: 4px;
 }
-
 .transcript-container .transcript-scroll-wrapper::-webkit-scrollbar-thumb:hover {
   background: #c0c4cc;
 }
-
 .transcript-container .transcript-scroll-wrapper .transcript-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
   width: 100%;
 }
-
 .transcript-container .transcript-scroll-wrapper .transcript-list .transcript-item {
   padding: 12px 16px;
   border-radius: 6px;
@@ -283,32 +293,26 @@ html, body {
   box-sizing: border-box;
   pointer-events: auto;
 }
-
 .transcript-container .transcript-scroll-wrapper .transcript-list .transcript-item:hover {
   background: #f0f5ff;
 }
-
 .transcript-container .transcript-scroll-wrapper .transcript-list .transcript-item.highlight {
   background: #e6f7ff;
   border-left: 4px solid #0066cc;
 }
-
 .transcript-container .transcript-scroll-wrapper .transcript-list .transcript-item .item-header {
   display: flex;
   justify-content: space-between;
   margin-bottom: 8px;
   font-size: 12px;
 }
-
 .transcript-container .transcript-scroll-wrapper .transcript-list .transcript-item .item-header .speaker-tag {
   color: #0066cc;
   font-weight: 500;
 }
-
 .transcript-container .transcript-scroll-wrapper .transcript-list .transcript-item .item-header .time-tag {
   color: #86909c;
 }
-
 .transcript-container .transcript-scroll-wrapper .transcript-list .transcript-item .item-content {
   font-size: 14px;
   line-height: 1.6;
@@ -316,15 +320,12 @@ html, body {
   word-wrap: break-word;
   word-break: break-all;
 }
-
 .transcript-container .transcript-scroll-wrapper .transcript-list .empty-tip {
   text-align: center;
   color: #86909c;
   font-size: 14px;
   padding: 40px 0;
 }
-
-/* 会议纪要容器 */
 .summary-container {
   width: 100%;
   height: 100%;
@@ -336,50 +337,41 @@ html, body {
   display: flex;
   flex-direction: column;
 }
-
 .summary-container .summary-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
-  flex-shrink: 0; /* 防止标题栏被压缩 */
+  flex-shrink: 0;
 }
-
 .summary-container .summary-header h4 {
   font-size: 15px;
   color: #1d2129;
   margin: 0;
   font-weight: 500;
 }
-
 .summary-container .summary-content {
-  flex: 1; /* 关键：占满剩余高度，让滚动生效 */
-  overflow-y: auto; /* 关键：允许垂直滚动 */
+  flex: 1;
+  overflow-y: auto;
   overflow-x: hidden;
   padding: 16px;
   background: #f9fafc;
   border-radius: 6px;
 }
-
 .summary-container .summary-content::-webkit-scrollbar {
   width: 8px;
 }
-
 .summary-container .summary-content::-webkit-scrollbar-track {
   background: #f8f8f8;
   border-radius: 4px;
 }
-
 .summary-container .summary-content::-webkit-scrollbar-thumb {
   background: #dcdfe6;
   border-radius: 4px;
 }
-
 .summary-container .summary-content::-webkit-scrollbar-thumb:hover {
   background: #c0c4cc;
 }
-
-
 .summary-container .summary-content pre {
   font-size: 14px;
   line-height: 1.8;
@@ -388,16 +380,117 @@ html, body {
   margin: 0;
   font-family: inherit;
 }
-
 .summary-container .summary-content .empty-tip {
   text-align: center;
   color: #86909c;
   font-size: 14px;
   padding: 40px 0;
 }
-
 /* 滚动条全局样式 */
 * {
   scrollbar-width: auto;
   -ms-overflow-style: auto;
+}
+
+/* 额外补充：确保左侧面板按钮在响应式场景下也不被遮挡 */
+@media (max-width: 768px) {
+  .audio-panel {
+    width: 100%;
+    min-width: unset;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  .main-container {
+    flex-direction: column;
+  }
+  .upload-area .action-buttons {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 768px) {
+  .audio-panel {
+    width: 100%;
+    min-width: unset;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid #e5e7eb;
+    /* 移动端增大底部内边距 */
+    padding-bottom: 80px; 
+    min-height: auto;
+  }
+  .main-container {
+    flex-direction: column;
+    /* 移动端主容器高度自适应 */
+    height: auto; 
+  }
+  .upload-area .action-buttons {
+    /* 移动端允许按钮换行，避免横向裁切 */
+    flex-wrap: wrap; 
+  }
+}
+
+/* 左侧面板：增大宽度 + 强制不被覆盖 */
+.audio-panel {
+  /* 从340px增大到420px，给按钮足够横向空间 */
+  width: 420px !important; 
+  min-width: 420px !important; 
+  background: #fff;
+  border-right: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+  /* 强制层级最高，绝对不被右侧覆盖 */
+  z-index: 9999 !important; 
+  /* 按钮区域额外加内边距，避免贴边 */
+  padding-bottom: 60px;
+  padding-right: 10px;
+}
+
+/* 主容器：禁止右侧面板挤压左侧 */
+.main-container {
+  display: flex;
+  height: calc(100vh - 60px);
+  width: 100%;
+  position: relative;
+  /* 禁止子元素溢出覆盖 */
+  overflow: hidden; 
+  /* 强制左侧面板在最前 */
+  flex-wrap: nowrap; 
+}
+
+/* 右侧面板：强制从左侧面板右侧开始布局，不重叠 */
+.content-panel {
+  flex: 1;
+  padding: 20px;
+  overflow: auto;
+  z-index: 4;
+  /* 关键：从左侧面板宽度位置开始，不覆盖左侧 */
+  margin-left: 420px !important; 
+  /* 右侧面板宽度自适应剩余空间 */
+  width: calc(100% - 420px) !important; 
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+}
+
+/* 按钮区域：强制换行 + 足够宽度 */
+.upload-area .action-buttons {
+  display: flex;
+  gap: 8px;
+  /* 允许按钮换行，避免横向挤压 */
+  flex-wrap: wrap !important; 
+  justify-content: flex-start !important;
+  padding: 12px 0;
+  min-height: 80px;
+  align-items: center;
+  position: relative;
+  z-index: 9999;
+  /* 按钮区域占满左侧面板宽度 */
+  width: 100% !important; 
 }
