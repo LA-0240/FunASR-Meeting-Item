@@ -156,7 +156,3 @@ ALLOWED_EXTENSIONS = ('.wav', '.mp3', '.ogg', '.flac')  # 支持的音频格式
 
 # 支持的视频格式
 ALLOWED_VIDEO_EXTENSIONS = ('.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv')
-# 字幕文件存储目录
-SUBTITLE_DIR = os.path.join(BASE_DIR, 'subtitle_files')
-if not os.path.exists(SUBTITLE_DIR):
-    os.makedirs(SUBTITLE_DIR)

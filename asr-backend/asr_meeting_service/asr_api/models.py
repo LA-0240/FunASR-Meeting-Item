@@ -19,7 +19,18 @@ def load_asr_model():
                 vad_model="fsmn-vad",
                 punc_model="ct-punc",
                 spk_model="cam++",
-                device="cpu"
+                
+                # 离线模式
+                # # 1. ASR 主模型（本地路径）
+                # model=r"C:\Users\20688\.cache\modelscope\hub\models\iic\speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+                # # 2. VAD 语音检测模型（本地路径）
+                # vad_model=r"C:\Users\20688\.cache\modelscope\hub\models\iic\speech_fsmn_vad_zh-cn-16k-common-pytorch",
+                # # 3. 标点模型（本地路径）
+                # punc_model=r"C:\Users\20688\.cache\modelscope\hub\models\iic\punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
+                # # 4. 说话人分离模型（本地路径）
+                # spk_model=r"C:\Users\20688\.cache\modelscope\hub\models\iic\speech_campplus_sv_zh-cn_16k-common",
+
+                device="cpu",
             )
             print(f"{datetime.now()} - ASR模型加载完成（测试模式）")
         except Exception as e:

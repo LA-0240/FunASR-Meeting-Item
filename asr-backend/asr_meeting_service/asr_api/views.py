@@ -15,15 +15,15 @@ import time
 import uuid
 from datetime import datetime
 import traceback
-from .utils import extract_audio_from_video, generate_srt_subtitle
+from .utils import extract_audio_from_video
 
-# ------------------- 视频上传+语音转写+字幕生成接口 -------------------
+# ------------------- 视频上传+语音转写 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class VideoASRTranscribeView(APIView):
     def post(self, request):
         """
-        视频上传接口：提取音频→ASR转写→生成SRT字幕
-        返回：转写文本 + 字幕文件下载链接
+        视频上传接口：提取音频→ASR转写
+        返回：转写文本
         """
         temp_video = None
         temp_audio = None
@@ -130,22 +130,12 @@ class VideoASRTranscribeView(APIView):
                     "end_time": 0.00
                 }]
             
-            # # 8. 生成SRT字幕文件
-            # srt_filename = f"subtitle_{uuid.uuid4()}.srt"
-            # srt_path = os.path.join(settings.SUBTITLE_DIR, srt_filename)
-            # generate_srt_subtitle(formatted_result, srt_path)
-            
-            # # 9. 构建字幕文件下载链接（需配置静态文件/媒体文件访问）
-            # # 生产环境建议使用nginx代理subtitle_files目录，此处简化为相对路径
-            # subtitle_download_url = f"/download_subtitle/{srt_filename}"
-            
             # 10. 返回结果
             return Response({
                 "status": "success",
                 "filename": file.name,
                 "transcription": formatted_result,
-                # "subtitle_download_url": subtitle_download_url,
-                "note": "已完成视频音频提取+ASR转写+SRT字幕生成",
+                "note": "已完成视频音频提取+ASR转写",
                 "timestamp": datetime.now().isoformat()
             })
         
@@ -164,27 +154,6 @@ class VideoASRTranscribeView(APIView):
                         print(f"{datetime.now()} - 临时文件 {temp_file} 已删除")
                     except Exception as e:
                         print(f"{datetime.now()} - 临时文件删除失败：{str(e)}")
-
-# ------------------- 字幕文件下载接口 -------------------
-class SubtitleDownloadView(APIView):
-    def get(self, request, srt_filename):
-        """下载SRT字幕文件"""
-        srt_path = os.path.join(settings.SUBTITLE_DIR, srt_filename)
-        if not os.path.exists(srt_path):
-            return Response(
-                {"status": "failed", "detail": "字幕文件不存在"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        # 返回文件下载响应
-        response = FileResponse(
-            open(srt_path, 'rb'),
-            filename=srt_filename,
-            content_type="text/plain; charset=utf-8"
-        )
-        # 可选：设置下载头
-        response['Content-Disposition'] = f'attachment; filename="{srt_filename}"'
-        return response
 
 # 初始化LLM客户端
 llm_client = OpenAI(
