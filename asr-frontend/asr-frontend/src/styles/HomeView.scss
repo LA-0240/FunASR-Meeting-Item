@@ -494,3 +494,36 @@ html, body {
   /* 按钮区域占满左侧面板宽度 */
   width: 100% !important; 
 }
+
+/* 声纹管理表格适配 */
+.content-panel :deep(.voiceprint-container) {
+  height: 100%;
+  width: 100%;
+}
+
+.content-panel :deep(.el-table) {
+  width: 100%;
+  --el-table-header-text-color: #1d2129;
+}
+.voiceprint-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.upload-btn {
+  width: 100%;
+  margin-top: 8px;
+}
+
+:deep(.el-upload-dragger) {
+  width: 100%;
+  padding: 20px;
+}
+
+:deep(.el-dialog__body) {
+  padding: 20px;
+}

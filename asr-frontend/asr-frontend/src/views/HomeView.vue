@@ -192,6 +192,14 @@
               </div>
             </div>
           </el-tab-pane>
+
+          <!-- 新增：声纹管理标签页 -->
+          <el-tab-pane label="声纹管理" name="voiceprint">
+            <div class="summary-container">
+              <VoiceprintManager />
+            </div>
+          </el-tab-pane>
+
         </el-tabs>
       </div>
     </div>
@@ -203,6 +211,9 @@ import { useAudio } from '@/composables/useAudio'
 import { useASR } from '@/composables/useASR'
 import { useVideoASR } from '@/composables/useVideoASR'
 import { useSummary } from '@/composables/useSummary'
+
+import VoiceprintManager from '@/components/VoiceprintManager.vue' // 新增导入
+
 import '@/styles/HomeView.scss'
 
 // 音频控制逻辑
