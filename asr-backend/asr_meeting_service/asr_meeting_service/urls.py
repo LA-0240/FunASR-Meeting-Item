@@ -26,7 +26,11 @@ from asr_api.views import (
     ExportSummaryWordView,
     ExportAbstractWordView,
     VideoASRTranscribeView,
-    
+     # 新增声纹管理接口
+    VoiceprintAddView,
+    VoiceprintListView,
+    VoiceprintRenameView,
+    VoiceprintDeleteView,
 )
 
 urlpatterns = [
@@ -47,4 +51,9 @@ urlpatterns = [
     path('export_summary_word', ExportSummaryWordView.as_view(), name='export-summary-word'),
     # Word导出（会议摘要）
     path('export_abstract_word', ExportAbstractWordView.as_view(), name='export-abstract-word'),
+    # 声纹管理接口
+    path('voiceprint/add', VoiceprintAddView.as_view(), name='voiceprint-add'),
+    path('voiceprint/list', VoiceprintListView.as_view(), name='voiceprint-list'),
+    path('voiceprint/rename', VoiceprintRenameView.as_view(), name='voiceprint-rename'),
+    path('voiceprint/delete', VoiceprintDeleteView.as_view(), name='voiceprint-delete'),
 ]
