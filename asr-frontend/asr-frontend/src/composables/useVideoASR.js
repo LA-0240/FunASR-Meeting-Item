@@ -6,7 +6,6 @@ export const useVideoASR = (currentFile) => {
   const videoAsrLoading = ref(false)
   const transcriptionResult = ref([])
   const transcriptionText = ref('')
-  const subtitleDownloadUrl = ref('')
 
   const videoAsrForm = reactive({
     batch_size_s: 300,
@@ -26,11 +25,10 @@ export const useVideoASR = (currentFile) => {
       const response = await requestVideoASR(formData)
       if (response.data.status === 'success') {
         transcriptionResult.value = response.data.transcription
-        subtitleDownloadUrl.value = response.data.subtitle_download_url
         transcriptionText.value = response.data.transcription
           .map(item => `【发言人${item.spk}】${item.text}`)
           .join('\n')
-        ElMessage.success('视频转写+字幕生成完成！')
+          ElMessage.success('视频转写完成！')
       } else {
         ElMessage.error(response.data.detail || '视频转写失败')
       }
@@ -46,7 +44,6 @@ export const useVideoASR = (currentFile) => {
     videoAsrLoading,
     transcriptionResult,
     transcriptionText,
-    subtitleDownloadUrl,
     videoAsrForm,
     handleVideoASR
   }

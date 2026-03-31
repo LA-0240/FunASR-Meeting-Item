@@ -106,16 +106,6 @@ export const useSummary = (transcriptionText, currentFile, subtitleDownloadUrl) 
     }
   }
 
-  // 新增：下载SRT字幕
-  const downloadSubtitle = () => {
-    if (!subtitleDownloadUrl.value) return ElMessage.warning('暂无字幕可下载！')
-    const a = document.createElement('a')
-    a.href = subtitleDownloadUrl.value
-    a.download = ''
-    a.click()
-    ElMessage.success('字幕下载开始')
-  }
-
   return {
     summaryLoading,
     summaryResult,
@@ -127,6 +117,5 @@ export const useSummary = (transcriptionText, currentFile, subtitleDownloadUrl) 
     exportTranscriptionWordHandler,
     exportSummaryWordHandler,
     exportAbstractWordHandler,
-    downloadSubtitle // 导出方法
   }
 }

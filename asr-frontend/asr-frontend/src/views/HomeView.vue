@@ -131,15 +131,6 @@
                 <el-button size="small" @click="exportTranscriptionWordHandler">
                   <i class="el-icon-download"></i> 导出Word
                 </el-button>
-                <!-- 新增：下载SRT字幕 -->
-                <el-button 
-                  size="small" 
-                  type="warning"
-                  :disabled="!subtitleDownloadUrl"
-                  @click="downloadSubtitle"
-                >
-                  <i class="el-icon-download"></i> 下载字幕
-                </el-button>
               </div>
               
               <div class="transcript-scroll-wrapper" ref="scrollWrapperRef">

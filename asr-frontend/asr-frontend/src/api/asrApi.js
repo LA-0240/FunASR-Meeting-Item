@@ -56,8 +56,3 @@ export const exportAbstractWord = async (abstract_text, file_name) => {
 export const requestVideoASR = async (formData) => {
   return axios.post('/video_asr', formData)
 }
-
-// 下载字幕
-export const downloadSubtitleApi = (url) => {
-  return axios.get(url, { responseType: 'blob' })
-}
