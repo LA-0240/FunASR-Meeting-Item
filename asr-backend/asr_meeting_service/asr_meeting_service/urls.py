@@ -15,45 +15,12 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 
+
 from django.contrib import admin
-from django.urls import path
-from asr_api.views import (
-    HealthCheckView,
-    ASRTranscribeView,
-    MeetingSummaryView,
-    MeetingAbstractView,
-    ExportTranscriptionWordView,
-    ExportSummaryWordView,
-    ExportAbstractWordView,
-    VideoASRTranscribeView,
-     # 新增声纹管理接口
-    VoiceprintAddView,
-    VoiceprintListView,
-    VoiceprintRenameView,
-    VoiceprintDeleteView,
-)
+from django.urls import path, include
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    # 基础接口
-    path('', HealthCheckView.as_view(), name='health-check'),
-    # ASR语音转文字
-    path('asr', ASRTranscribeView.as_view(), name='asr-transcribe'),
-     # 视频ASR接口（新增）
-    path('video_asr', VideoASRTranscribeView.as_view(), name='video-asr-transcribe'),
-    # 会议纪要生成
-    path('generate_summary', MeetingSummaryView.as_view(), name='generate-summary'),
-    # 会议摘要（新增）
-    path("meeting_abstract", MeetingAbstractView.as_view(), name="meeting-abstract"),
-    # Word导出（转录文本）
-    path('export_transcription_word', ExportTranscriptionWordView.as_view(), name='export-transcription-word'),
-    # Word导出（会议纪要）
-    path('export_summary_word', ExportSummaryWordView.as_view(), name='export-summary-word'),
-    # Word导出（会议摘要）
-    path('export_abstract_word', ExportAbstractWordView.as_view(), name='export-abstract-word'),
-    # 声纹管理接口
-    path('voiceprint/add', VoiceprintAddView.as_view(), name='voiceprint-add'),
-    path('voiceprint/list', VoiceprintListView.as_view(), name='voiceprint-list'),
-    path('voiceprint/rename', VoiceprintRenameView.as_view(), name='voiceprint-rename'),
-    path('voiceprint/delete', VoiceprintDeleteView.as_view(), name='voiceprint-delete'),
+    # 包含 asr_api子模块的路由
+    path('', include('asr_api.urls')),
 ]

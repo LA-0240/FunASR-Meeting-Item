@@ -1,6 +1,7 @@
 # models.py 最终修复版
 from django.conf import settings
 from django.db import models
+from django.contrib.auth.models import AbstractUser
 from datetime import datetime
 import os
 import numpy as np
@@ -23,7 +24,7 @@ def load_asr_model():
                 spk_model="cam++",
                 device="cpu",
             )
-            print(f"{datetime.now()} - ASR模型加载完成")
+            print(f"{datetime.now()} - ✅ ASR模型加载完成")
         except Exception as e:
             print(f"ASR加载失败: {e}")
             raise
@@ -55,7 +56,18 @@ def ready():
         load_asr_model()
         load_voiceprint_model()
 
-# 你的 AudioRecord 模型保持不变
+# 用户模型
+class User(AbstractUser):
+    """用户模型"""
+    email = models.EmailField(unique=True, verbose_name="邮箱")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    class Meta:
+        verbose_name = "用户"
+        verbose_name_plural = "用户"
+
+# 原有的 AudioRecord 模型保持不变
 class AudioRecord(models.Model):
     filename = models.CharField(max_length=255, verbose_name="文件名")
     file_size = models.IntegerField(verbose_name="文件大小（字节）")
@@ -71,7 +83,8 @@ class AudioRecord(models.Model):
         return self.filename
 
 class Voiceprint(models.Model):
-    name = models.CharField(max_length=100, verbose_name="声纹名称", unique=True)
+    name = models.CharField(max_length=100, verbose_name="声纹名称")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="所属用户")  # 新增外键关联
     feature = models.BinaryField(verbose_name="声纹特征（二进制存储）")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
@@ -79,9 +92,10 @@ class Voiceprint(models.Model):
     class Meta:
         verbose_name = "声纹信息"
         verbose_name_plural = "声纹信息"
+        unique_together = ('user', 'name')  # 确保每个用户的声纹名称唯一
 
     def __str__(self):
-        return self.name
+        return f"{self.user.username}: {self.name}"
 
     @staticmethod
     def feature_to_binary(feature):
@@ -97,3 +111,50 @@ class Voiceprint(models.Model):
         feature2 = feature2 / np.linalg.norm(feature2)
         similarity = np.dot(feature1, feature2.T)
         return similarity, similarity >= threshold
+
+# 上传文件模型
+class UploadedFile(models.Model):
+    """上传文件模型"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="所属用户")
+    original_name = models.CharField(max_length=255, verbose_name="原始文件名")
+    stored_name = models.CharField(max_length=255, verbose_name="存储文件名", unique=True)
+    file_path = models.CharField(max_length=500, verbose_name="文件存储路径")
+    file_type = models.CharField(max_length=50, verbose_name="文件类型")  # audio/video
+    file_size = models.IntegerField(verbose_name="文件大小（字节）")
+    upload_time = models.DateTimeField(auto_now_add=True, verbose_name="上传时间")
+    status = models.CharField(max_length=20, default="original", verbose_name="文件状态")  # original/processed
+    meeting_type = models.CharField(max_length=100, blank=True, null=True, verbose_name="会议类型")
+
+    class Meta:
+        verbose_name = "上传文件"
+        verbose_name_plural = "上传文件"
+
+    def __str__(self):
+        return self.original_name
+    
+# 转录模型
+class Transcription(models.Model):
+    """转录模型"""
+    file = models.OneToOneField(UploadedFile, on_delete=models.CASCADE, verbose_name="关联文件")
+    transcription_text = models.TextField(verbose_name="转录文本")
+    speaker_info = models.JSONField(blank=True, null=True, verbose_name="说话人信息")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    class Meta:
+        verbose_name = "转录记录"
+        verbose_name_plural = "转录记录"
+
+# 会议纪要模型
+class MeetingSummary(models.Model):
+    """会议纪要模型"""
+    file = models.OneToOneField(UploadedFile, on_delete=models.CASCADE, verbose_name="关联文件")
+    summary_text = models.TextField(verbose_name="纪要文本")
+    abstract_text = models.TextField(blank=True, null=True, verbose_name="摘要文本")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+    is_customized = models.BooleanField(default=False, verbose_name="是否自定义修改")
+
+    class Meta:
+        verbose_name = "会议纪要"
+        verbose_name_plural = "会议纪要"

@@ -10,27 +10,32 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+# 建立在项目根目录下的settings.py文件，包含Django项目的所有配置项。
+# 这个文件是Django项目的核心配置文件，定义了数据库连接、应用注册、中间件、模板设置、静态文件配置等。
 import os
 from pathlib import Path
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+# 在项目内部定义BASE_DIR，方便后续路径配置
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
+# 快速启动开发设置 - 不适合生产环境
+# 生产环境部署检查清单: https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
+# 安全警告：请在生产环境中使用环境变量或其他安全方式存储SECRET_KEY
 SECRET_KEY = "django-insecure-pq9of_rqzsc6+j2!r+6h-i%i4laqvk_yb158#mm1g&2bny5lo("
 
-# SECURITY WARNING: don't run with debug turned on in production!
+# 调试模式：如果项目没有部署到生产环境，且DEBUG = Ture（线下模式，允许调试），则允许所有主机访问（ALLOWED_HOSTS = []）。
+# 如果部署到生产环境，必须设置DEBUG = False，并且ALLOWED_HOSTS必须包含实际的域名或IP地址。
 DEBUG = True
 
+# 设置允许哪些主机访问我们的Django后台站点
+# 如果项目上线部署到远程服务器，必须将ALLOWED_HOSTS设置为实际的域名或IP地址，例如：ALLOWED_HOSTS = ['example.com', 'www.example.com']。
+# 如果DEBUG = True（线下开发模式），可以暂时设置ALLOWED_HOSTS = []，表示允许所有主机访问，但这在生产环境中是非常危险的。
 ALLOWED_HOSTS = []
 
 
-# Application definition
-
+# 应用程序定义-注册Django内置应用程序、第三方应用程序和项目自定义应用程序
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -38,13 +43,15 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-     # 第三方应用
+     # 第三方应用程序-提供REST API功能和跨域支持
     'rest_framework',
+    'rest_framework.authtoken',  # 添加这一行
     'corsheaders',
-    # 自定义应用
-    'asr_api',
+    # 子应用程序-注册ASR相关的视图和模型
+    'asr_api'
 ]
 
+# 中间件定义-处理请求和响应的组件
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -56,8 +63,10 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
+# 根URL配置-指定项目的URL路由模块
 ROOT_URLCONF = "asr_meeting_service.urls"
 
+# 模板（前端页面）配置-指定模板引擎和模板目录
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
@@ -73,12 +82,12 @@ TEMPLATES = [
     },
 ]
 
+# WSGI应用程序配置-指定WSGI应用程序模块
 WSGI_APPLICATION = "asr_meeting_service.wsgi.application"
 
 
-# Database
+# 数据库配置
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
-
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
@@ -87,9 +96,8 @@ DATABASES = {
 }
 
 
-# Password validation
+# 密码验证
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
-
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
@@ -106,21 +114,16 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
-# Internationalization
+# 国际化配置
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
-
 LANGUAGE_CODE = "en-us"
-
 TIME_ZONE = "UTC"
-
 USE_I18N = True
-
 USE_TZ = True
 
 
-# Static files (CSS, JavaScript, Images)
+# 静态文件地址（存放CSS、JavaScript、图片等静态资源）
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
-
 STATIC_URL = "static/"
 
 # 跨域配置（开发环境允许所有域名，生产环境替换为具体域名）
@@ -128,9 +131,6 @@ CORS_ALLOW_ALL_ORIGINS = True  # 等价于FastAPI的allow_origins=["*"]
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 CORS_ALLOW_HEADERS = ['*']
-
-# 根路由配置
-ROOT_URLCONF = 'asr_meeting_service.urls'
 
 # 临时文件目录（与原FastAPI一致）
 TEMP_DIR = os.path.join(BASE_DIR, 'temp_files')
@@ -143,12 +143,23 @@ REST_FRAMEWORK = {
         'rest_framework.renderers.JSONRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer',  # 开发环境便于调试
     ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',  # 添加这一行
+    ],
     'EXCEPTION_HANDLER': 'asr_api.utils.custom_exception_handler',  # 自定义异常处理
 }
 
+# 添加文件上传目录配置
+FILE_UPLOAD_DIR = os.path.join(BASE_DIR, 'uploaded_files')
+if not os.path.exists(FILE_UPLOAD_DIR):
+    os.makedirs(FILE_UPLOAD_DIR)
+
+# 在文件末尾添加以下配置
+AUTH_USER_MODEL = 'asr_api.User'
+
 # 自定义配置（LLM和ASR相关）
 LLM_CONFIG = {
-    "api_key": "ms-8bc4a771-9cfc-42c9-956f-a725ee57aa09",  # 替换为实际Token
+    "api_key": "ms-74ceb98c-5801-46ae-90c3-e5e5bb9bb886",  # 替换为实际Token
     "base_url": "https://api-inference.modelscope.cn/v1/",
     "model_name": "Qwen/Qwen3.5-35B-A3B"
 }

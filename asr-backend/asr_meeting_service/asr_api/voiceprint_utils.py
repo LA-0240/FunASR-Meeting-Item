@@ -33,55 +33,78 @@ def extract_voiceprint_feature(audio_path):
         return None
 
 
-def check_voiceprint_duplicate(new_feature, threshold=0.85):
-    max_similarity = 0.0
-    duplicate_name = None
-    voiceprints = Voiceprint.objects.all()
-    for vp in voiceprints:
-        exist_feature = Voiceprint.binary_to_feature(vp.feature)
-        similarity, is_match = Voiceprint.calculate_similarity(new_feature, exist_feature, threshold)
-        if similarity > max_similarity:
-            max_similarity = similarity
-            if is_match:
+def check_voiceprint_duplicate(feature, user=None):
+    """
+    检查声纹是否重复
+    :param feature: 声纹特征
+    :param user: 用户对象（可选），如果提供则只检查该用户的声纹
+    :return: (是否重复, 重复的声纹名称, 最大相似度)
+    """
+    try:
+        if user:
+            # 只检查当前用户的声纹
+            voiceprints = Voiceprint.objects.filter(user=user)
+        else:
+            # 检查所有声纹（兼容旧逻辑）
+            voiceprints = Voiceprint.objects.all()
+        
+        max_similarity = 0
+        duplicate_name = None
+        
+        for vp in voiceprints:
+            vp_feature = Voiceprint.binary_to_feature(vp.feature)
+            similarity, _ = Voiceprint.calculate_similarity(feature, vp_feature)
+            
+            if similarity > max_similarity:
+                max_similarity = similarity
                 duplicate_name = vp.name
-    return duplicate_name is not None, duplicate_name, max_similarity
+        
+        # 相似度阈值
+        if max_similarity > 0.85:
+            return True, duplicate_name, max_similarity
+        return False, None, max_similarity
+    except Exception as e:
+        print(f"声纹重复检查失败: {e}")
+        return False, None, 0
 
-
-def match_voiceprint(spk_feature, threshold=0.8):
-    """修正：添加日志，返回相似度+特征维度，强制打印所有匹配细节"""
-    voiceprints = Voiceprint.objects.all()
-    if voiceprints.count() == 0:
-        print("❌ 声纹库为空，无法匹配")
-        return None
-    
-    max_sim = 0.0
-    matched_name = None
-    # 打印输入特征的基础信息
-    print(f"🔍 待匹配特征维度：{spk_feature.shape}，归一化前范数：{np.linalg.norm(spk_feature):.4f}")
-    
-    for vp in voiceprints:
-        exist_feature = Voiceprint.binary_to_feature(vp.feature)
-        # 1. 打印库中特征维度
-        print(f"\n📚 声纹库-{vp.name}：维度{exist_feature.shape}，归一化前范数：{np.linalg.norm(exist_feature):.4f}")
+def match_voiceprint(feature, user=None):
+    """
+    匹配声纹
+    :param feature: 声纹特征
+    :param user: 用户对象（可选），如果提供则只匹配该用户的声纹
+    :return: 匹配的声纹名称，未匹配返回None
+    """
+    try:
+        print(f"声纹匹配用户: {user.username if user and user.is_authenticated else 'None'}")
         
-        # 2. 维度不匹配时的详细提示
-        if spk_feature.shape != exist_feature.shape:
-            print(f"⚠️ 特征维度不匹配：输入{spk_feature.shape} vs 库中{exist_feature.shape}（{vp.name}）")
-            continue
+        if user and user.is_authenticated:
+            # 只匹配当前用户的声纹
+            voiceprints = Voiceprint.objects.filter(user=user)
+            print(f"找到 {voiceprints.count()} 个声纹")
+        else:
+            # 未登录用户，不进行声纹匹配
+            print("未登录用户，不进行声纹匹配")
+            return None
         
-        # 3. 计算相似度并打印（保留4位小数）
-        similarity, is_match = Voiceprint.calculate_similarity(spk_feature, exist_feature, threshold)
-        print(f"✅ {vp.name} 相似度：{similarity:.4f} | 阈值：{threshold} | 是否匹配：{is_match}")
+        max_similarity = 0
+        matched_name = None
         
-        # 4. 更新最高相似度
-        if similarity > max_sim:
-            max_sim = similarity
-            if is_match:
+        for vp in voiceprints:
+            vp_feature = Voiceprint.binary_to_feature(vp.feature)
+            similarity, _ = Voiceprint.calculate_similarity(feature, vp_feature)
+            print(f"声纹 {vp.name} 相似度: {similarity}")
+            
+            if similarity > max_similarity:
+                max_similarity = similarity
                 matched_name = vp.name
-    
-    # 最终匹配结果汇总
-    print(f"\n📊 匹配汇总：最高相似度={max_sim:.4f} | 匹配名称={matched_name} | 阈值={threshold}")
-    # 即使未匹配到，也打印最高相似度（关键！）
-    if not matched_name:
-        print(f"❌ 无匹配结果：最高相似度{max_sim:.4f} < 阈值{threshold}")
-    return matched_name
+        
+        # 相似度阈值
+        print(f"最大相似度: {max_similarity}")
+        if max_similarity > 0.85:
+            print(f"匹配成功: {matched_name}")
+            return matched_name
+        print("无匹配声纹")
+        return None
+    except Exception as e:
+        print(f"声纹匹配失败: {e}")
+        return None
