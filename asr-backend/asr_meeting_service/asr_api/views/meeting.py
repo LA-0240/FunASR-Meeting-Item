@@ -10,7 +10,7 @@ import time
 import uuid
 from datetime import datetime
 import traceback
-from ..models import UploadedFile, MeetingSummary, Transcription
+from ..models import UploadedFile, MeetingSummary, Transcription, Prompt
 from ..auth_utils import require_auth
 
 # 初始化LLM客户端
@@ -31,6 +31,7 @@ class MeetingSummaryView(APIView):
             output_format = request.data.get("output_format", "txt")
             custom_system_prompt = request.data.get("custom_system_prompt", None)
             custom_user_prompt = request.data.get("custom_user_prompt", None)
+            prompt_id = request.data.get("prompt_id", None)
             force_regenerate = request.data.get("force_regenerate", False)
             
             # 2. 输入校验
@@ -71,14 +72,45 @@ class MeetingSummaryView(APIView):
                     return Response({
                         "status": "success",
                         "detail": "会议纪要已存在",
-                        "meeting_minutes": existing_summary.summary_text,
+                        "meeting_summary": existing_summary.summary_text,
                         "is_customized": existing_summary.is_customized,
                         "timestamp": existing_summary.updated_at.strftime("%Y%m%d_%H%M%S")
                     }, status=HTTP_200_OK)
                 except MeetingSummary.DoesNotExist:
                     pass
             
-            # 5. 定义默认Prompt
+            # 5. 处理Prompt模板
+            # 优先级：自定义 > 模板 > 默认
+            template_system_prompt = None
+            template_user_prompt = None
+            
+            # 如果提供了prompt_id，使用对应的模板
+            if prompt_id:
+                try:
+                    # 检查模板是否存在
+                    prompt = Prompt.objects.get(id=prompt_id)
+                    # 验证权限：如果是自定义模板，必须属于当前用户
+                    if prompt.category == 'custom' and prompt.user != request.user:
+                        return Response(
+                            {"status": "failed", "detail": "模板不存在或无权限"},
+                            status=HTTP_404_NOT_FOUND
+                        )
+                    # 验证模板类型：必须是纪要模板
+                    if prompt.template_type != 'summary':
+                        return Response(
+                            {"status": "failed", "detail": "请选择纪要类型的模板"},
+                            status=HTTP_400_BAD_REQUEST
+                        )
+                    # 使用模板的prompt
+                    template_system_prompt = prompt.system_prompt
+                    template_user_prompt = prompt.user_prompt
+                except Prompt.DoesNotExist:
+                    return Response(
+                        {"status": "failed", "detail": "模板不存在"},
+                        status=HTTP_404_NOT_FOUND
+                    )
+            
+            # 6. 定义默认Prompt
             default_system_prompt = """你是专业的会议纪要生成助手，需严格按照以下要求处理：
 1. 结构化提取信息：
    - 会议主题（精准概括核心议题）
@@ -106,9 +138,18 @@ class MeetingSummaryView(APIView):
 3. 仅输出纪要文本，无需额外解释或说明
 4. 确保语言通顺，无语法错误，信息无遗漏"""
             
-            # 6. 优先级：自定义 > 默认
-            final_system_prompt = custom_system_prompt if (custom_system_prompt and custom_system_prompt.strip()) else default_system_prompt
-            final_user_prompt = custom_user_prompt if (custom_user_prompt and custom_user_prompt.strip()) else default_user_prompt
+            # 7. 优先级：自定义 > 模板 > 默认
+            final_system_prompt = custom_system_prompt if (custom_system_prompt and custom_system_prompt.strip()) else (
+                template_system_prompt if template_system_prompt else default_system_prompt
+            )
+            
+            # 处理user_prompt中的{transcription_text}占位符
+            if custom_user_prompt and custom_user_prompt.strip():
+                final_user_prompt = custom_user_prompt.replace('{transcription_text}', transcription_text)
+            elif template_user_prompt:
+                final_user_prompt = template_user_prompt.replace('{transcription_text}', transcription_text)
+            else:
+                final_user_prompt = default_user_prompt
             
             # 7. 调用LLM
             response = llm_client.chat.completions.create(
@@ -175,6 +216,7 @@ class MeetingAbstractView(APIView):
             abstract_length = request.data.get("abstract_length", "medium")  # short/medium/long
             custom_system_prompt = request.data.get("custom_system_prompt", None)
             custom_user_prompt = request.data.get("custom_user_prompt", None)
+            prompt_id = request.data.get("prompt_id", None)
             force_regenerate = request.data.get("force_regenerate", False)
             
             # 2. 输入校验
@@ -232,7 +274,38 @@ class MeetingAbstractView(APIView):
                 except MeetingSummary.DoesNotExist:
                     pass
             
-            # 5. 定义默认Prompt（轻量化摘要）
+            # 6. 处理Prompt模板
+            # 优先级：自定义 > 模板 > 默认
+            template_system_prompt = None
+            template_user_prompt = None
+            
+            # 如果提供了prompt_id，使用对应的模板
+            if prompt_id:
+                try:
+                    # 检查模板是否存在
+                    prompt = Prompt.objects.get(id=prompt_id)
+                    # 验证权限：如果是自定义模板，必须属于当前用户
+                    if prompt.category == 'custom' and prompt.user != request.user:
+                        return Response(
+                            {"status": "failed", "detail": "模板不存在或无权限"},
+                            status=HTTP_404_NOT_FOUND
+                        )
+                    # 验证模板类型：必须是摘要模板
+                    if prompt.template_type != 'abstract':
+                        return Response(
+                            {"status": "failed", "detail": "请选择摘要类型的模板"},
+                            status=HTTP_400_BAD_REQUEST
+                        )
+                    # 使用模板的prompt
+                    template_system_prompt = prompt.system_prompt
+                    template_user_prompt = prompt.user_prompt
+                except Prompt.DoesNotExist:
+                    return Response(
+                        {"status": "failed", "detail": "模板不存在"},
+                        status=HTTP_404_NOT_FOUND
+                    )
+            
+            # 7. 定义默认Prompt（轻量化摘要）
             default_system_prompt = f"""你是专业的会议摘要生成助手，需严格按照以下要求处理：
 1. 核心要求：
    - 仅提炼会议最核心的信息，拒绝冗余内容
@@ -254,9 +327,18 @@ class MeetingAbstractView(APIView):
 3. 确保覆盖核心议题、关键结论、重要待办
 4. 语言简洁凝练，符合正式会议摘要的表达习惯"""
             
-            # 6. 优先级：自定义 > 默认
-            final_system_prompt = custom_system_prompt if (custom_system_prompt and custom_system_prompt.strip()) else default_system_prompt
-            final_user_prompt = custom_user_prompt if (custom_user_prompt and custom_user_prompt.strip()) else default_user_prompt
+            # 8. 优先级：自定义 > 模板 > 默认
+            final_system_prompt = custom_system_prompt if (custom_system_prompt and custom_system_prompt.strip()) else (
+                template_system_prompt if template_system_prompt else default_system_prompt
+            )
+            
+            # 处理user_prompt中的{transcription_text}占位符
+            if custom_user_prompt and custom_user_prompt.strip():
+                final_user_prompt = custom_user_prompt.replace('{transcription_text}', transcription_text)
+            elif template_user_prompt:
+                final_user_prompt = template_user_prompt.replace('{transcription_text}', transcription_text)
+            else:
+                final_user_prompt = default_user_prompt
             
             # 7. 调用LLM生成摘要
             response = llm_client.chat.completions.create(
@@ -300,6 +382,111 @@ class MeetingAbstractView(APIView):
             )
 
 
+
+# ------------------- 获取会议纪要接口 -------------------
+@method_decorator(csrf_exempt, name='dispatch')
+class GetMeetingSummaryView(APIView):
+    @method_decorator(require_auth)
+    def get(self, request):
+        """获取文件的会议纪要"""
+        try:
+            # 1. 提取请求参数
+            file_id = request.query_params.get("file_id")
+            
+            # 2. 输入校验
+            if not file_id:
+                return Response(
+                    {"status": "failed", "detail": "文件ID不能为空"},
+                    status=HTTP_400_BAD_REQUEST
+                )
+            
+            # 3. 检查文件是否存在且属于当前用户
+            try:
+                file = UploadedFile.objects.get(id=file_id, user=request.user)
+            except UploadedFile.DoesNotExist:
+                return Response(
+                    {"status": "failed", "detail": "文件不存在或无权限"},
+                    status=HTTP_404_NOT_FOUND
+                )
+            
+            # 4. 检查是否已生成纪要
+            try:
+                existing_summary = MeetingSummary.objects.get(file=file)
+                if not existing_summary.summary_text:
+                    return Response(
+                        {"status": "failed", "detail": "会议纪要未生成"},
+                        status=HTTP_404_NOT_FOUND
+                    )
+                return Response({
+                    "status": "success",
+                    "meeting_summary": existing_summary.summary_text,
+                    "is_customized": existing_summary.is_customized,
+                    "timestamp": existing_summary.updated_at.strftime("%Y%m%d_%H%M%S")
+                }, status=HTTP_200_OK)
+            except MeetingSummary.DoesNotExist:
+                return Response(
+                    {"status": "failed", "detail": "会议纪要未生成"},
+                    status=HTTP_404_NOT_FOUND
+                )
+        
+        except Exception as e:
+            traceback.print_exc()
+            return Response(
+                {"status": "failed", "detail": f"获取会议纪要失败：{str(e)}"},
+                status=HTTP_400_BAD_REQUEST
+            )
+
+# ------------------- 获取会议摘要接口 -------------------
+@method_decorator(csrf_exempt, name='dispatch')
+class GetMeetingAbstractView(APIView):
+    @method_decorator(require_auth)
+    def get(self, request):
+        """获取文件的会议摘要"""
+        try:
+            # 1. 提取请求参数
+            file_id = request.query_params.get("file_id")
+            
+            # 2. 输入校验
+            if not file_id:
+                return Response(
+                    {"status": "failed", "detail": "文件ID不能为空"},
+                    status=HTTP_400_BAD_REQUEST
+                )
+            
+            # 3. 检查文件是否存在且属于当前用户
+            try:
+                file = UploadedFile.objects.get(id=file_id, user=request.user)
+            except UploadedFile.DoesNotExist:
+                return Response(
+                    {"status": "failed", "detail": "文件不存在或无权限"},
+                    status=HTTP_404_NOT_FOUND
+                )
+            
+            # 4. 检查是否已生成摘要
+            try:
+                existing_summary = MeetingSummary.objects.get(file=file)
+                if not existing_summary.abstract_text:
+                    return Response(
+                        {"status": "failed", "detail": "会议摘要未生成"},
+                        status=HTTP_404_NOT_FOUND
+                    )
+                return Response({
+                    "status": "success",
+                    "meeting_abstract": existing_summary.abstract_text,
+                    "timestamp": existing_summary.updated_at.strftime("%Y%m%d_%H%M%S")
+                }, status=HTTP_200_OK)
+            except MeetingSummary.DoesNotExist:
+                return Response(
+                    {"status": "failed", "detail": "会议摘要未生成"},
+                    status=HTTP_404_NOT_FOUND
+                )
+        
+        except Exception as e:
+            traceback.print_exc()
+            return Response(
+                {"status": "failed", "detail": f"获取会议摘要失败：{str(e)}"},
+                status=HTTP_400_BAD_REQUEST
+            )
 
 # ------------------- 会议纪要编辑接口（分离） -------------------
 @method_decorator(csrf_exempt, name='dispatch')

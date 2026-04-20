@@ -167,3 +167,8 @@ ALLOWED_EXTENSIONS = ('.wav', '.mp3', '.ogg', '.flac')  # 支持的音频格式
 
 # 支持的视频格式
 ALLOWED_VIDEO_EXTENSIONS = ('.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv')
+
+# 声纹文件存储目录
+VOICEPRINT_DIR = os.path.join(BASE_DIR, 'voiceprints')
+if not os.path.exists(VOICEPRINT_DIR):
+    os.makedirs(VOICEPRINT_DIR)

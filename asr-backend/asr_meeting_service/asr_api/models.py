@@ -86,6 +86,7 @@ class Voiceprint(models.Model):
     name = models.CharField(max_length=100, verbose_name="声纹名称")
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="所属用户")  # 新增外键关联
     feature = models.BinaryField(verbose_name="声纹特征（二进制存储）")
+    file_path = models.CharField(max_length=500, blank=True, null=True, verbose_name="声纹文件路径")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
 
@@ -144,6 +145,25 @@ class Transcription(models.Model):
     class Meta:
         verbose_name = "转录记录"
         verbose_name_plural = "转录记录"
+
+# Prompt模板模型
+class Prompt(models.Model):
+    """Prompt模板模型"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, verbose_name="所属用户")
+    name = models.CharField(max_length=255, verbose_name="模板名称")
+    system_prompt = models.TextField(verbose_name="系统提示词")
+    user_prompt = models.TextField(verbose_name="用户提示词")
+    category = models.CharField(max_length=20, choices=[('default', '默认'), ('custom', '自定义')], default='custom', verbose_name="分类")
+    template_type = models.CharField(max_length=20, choices=[('summary', '纪要'), ('abstract', '摘要')], default='summary', verbose_name="模板类型")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    class Meta:
+        verbose_name = "Prompt模板"
+        verbose_name_plural = "Prompt模板"
+
+    def __str__(self):
+        return f"{self.name} ({self.category}, {self.template_type})"
 
 # 会议纪要模型
 class MeetingSummary(models.Model):

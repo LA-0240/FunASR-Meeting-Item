@@ -18,7 +18,7 @@ import traceback
 @method_decorator(csrf_exempt, name='dispatch')
 class ExportTranscriptionWordView(APIView):
     def post(self, request):
-        """导出语音分离结果为Word文档"""
+        """导出语音分离结果为Word文档 （转录文本）"""
         try:
             # 1. 提取参数
             transcription_text = request.data.get("transcription_text", "").strip()

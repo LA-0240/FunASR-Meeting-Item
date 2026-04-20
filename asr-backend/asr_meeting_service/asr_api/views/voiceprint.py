@@ -75,15 +75,34 @@ class VoiceprintAddView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # 6. 保存声纹到数据库
+            # 6. 保存声纹文件到指定目录
+            # 创建用户目录
+            user_dir = os.path.join(settings.VOICEPRINT_DIR, f'user_{request.user.id}')
+            if not os.path.exists(user_dir):
+                os.makedirs(user_dir)
+            
+            # 生成唯一的文件名
+            timestamp = time.strftime('%Y%m%d%H%M%S')
+            random_str = str(uuid.uuid4())[:8]
+            file_extension = os.path.splitext(file.name)[1]
+            stored_filename = f'voiceprint_{timestamp}_{random_str}{file_extension}'
+            stored_path = os.path.join(user_dir, stored_filename)
+            
+            # 保存文件
+            with open(stored_path, 'wb') as f:
+                with open(temp_file, 'rb') as temp_f:
+                    f.write(temp_f.read())
+            
+            # 7. 保存声纹到数据库
             voiceprint = Voiceprint(
                 name=voiceprint_name,
                 user=request.user,  # 关联当前用户
-                feature=Voiceprint.feature_to_binary(vp_feature)
+                feature=Voiceprint.feature_to_binary(vp_feature),
+                file_path=stored_path
             )
             voiceprint.save()
             
-            # 7. 清理临时文件
+            # 8. 清理临时文件
             if os.path.exists(temp_file):
                 os.remove(temp_file)
             
@@ -106,11 +125,23 @@ class VoiceprintListView(APIView):
     @method_decorator(require_auth)  # 添加认证装饰器
     def get(self, request):
         try:
+            # 获取查询参数
+            name = request.query_params.get('name', '').strip()
+            
             # 只获取当前用户的声纹
-            voiceprints = Voiceprint.objects.filter(user=request.user).order_by("-created_at")
+            voiceprints = Voiceprint.objects.filter(user=request.user)
+            
+            # 如果提供了名称参数，进行过滤
+            if name:
+                voiceprints = voiceprints.filter(name__icontains=name)
+            
+            # 按创建时间倒序排序
+            voiceprints = voiceprints.order_by("-created_at")
+            
             vp_list = [{
                 "id": vp.id,
                 "name": vp.name,
+                "file_path": vp.file_path,
                 "created_at": vp.created_at.isoformat(),
                 "updated_at": vp.updated_at.isoformat()
             } for vp in voiceprints]
@@ -197,7 +228,14 @@ class VoiceprintDeleteView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
             
-            # 3. 删除声纹
+            # 3. 删除声纹文件
+            if voiceprint.file_path and os.path.exists(voiceprint.file_path):
+                try:
+                    os.remove(voiceprint.file_path)
+                except Exception as e:
+                    pass  # 文件删除失败不影响声纹删除
+            
+            # 4. 删除声纹
             vp_name = voiceprint.name
             voiceprint.delete()
             

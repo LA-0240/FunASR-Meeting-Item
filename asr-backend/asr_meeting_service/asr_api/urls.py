@@ -10,6 +10,8 @@ from .views import (
     MeetingAbstractView,
     MeetingSummaryUpdateView,
     MeetingAbstractUpdateView,
+    GetMeetingSummaryView,
+    GetMeetingAbstractView,
     # Word导出接口
     ExportTranscriptionWordView,
     ExportSummaryWordView,
@@ -36,6 +38,12 @@ from .views import (
     TranscriptionGenerateView,
     # 文件上传转录接口
     FileUploadTranscribeView,
+    # Prompt模板管理接口
+    PromptListView,
+    PromptAddView,
+    PromptUpdateView,
+    PromptDeleteView,
+    PromptCopyView,
 )
 
 urlpatterns = [
@@ -51,6 +59,8 @@ urlpatterns = [
     path("meeting_abstract", MeetingAbstractView.as_view(), name="meeting-abstract"),    # 会议摘要
     path("meeting/summary/update", MeetingSummaryUpdateView.as_view(), name="meeting-summary-update"),    # 会议纪要编辑
     path("meeting/abstract/update", MeetingAbstractUpdateView.as_view(), name="meeting-abstract-update"),    # 会议摘要编辑
+    path("meeting/summary/get", GetMeetingSummaryView.as_view(), name="meeting-summary-get"),    # 获取会议纪要
+    path("meeting/abstract/get", GetMeetingAbstractView.as_view(), name="meeting-abstract-get"),    # 获取会议摘要
     
     # Word导出接口
     path('export_transcription_word', ExportTranscriptionWordView.as_view(), name='export-transcription-word'),    # Word导出（转录文本）
@@ -83,4 +93,11 @@ urlpatterns = [
     
     # 文件上传转录接口
     path('file/upload_transcribe', FileUploadTranscribeView.as_view(), name='file-upload-transcribe'), # 文件上传自动转录
+    
+    # Prompt模板管理接口
+    path('prompt/list', PromptListView.as_view(), name='prompt-list'), # 获取模板列表
+    path('prompt/add', PromptAddView.as_view(), name='prompt-add'), # 添加模板
+    path('prompt/update/<int:prompt_id>', PromptUpdateView.as_view(), name='prompt-update'), # 更新模板
+    path('prompt/delete/<int:prompt_id>', PromptDeleteView.as_view(), name='prompt-delete'), # 删除模板
+    path('prompt/copy/<int:prompt_id>', PromptCopyView.as_view(), name='prompt-copy'), # 获取模板内容（用于前端复制到编辑窗口）
 ]
