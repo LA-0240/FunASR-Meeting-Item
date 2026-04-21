@@ -10,7 +10,10 @@ import time
 import uuid
 from datetime import datetime
 import traceback
-from ..models import UploadedFile, MeetingSummary, Transcription, Prompt
+import os
+import subprocess
+import json
+from ..models import UploadedFile, MeetingSummary, Transcription, Prompt, MeetingSegment
 from ..auth_utils import require_auth
 
 # 初始化LLM客户端
@@ -615,5 +618,580 @@ class MeetingAbstractUpdateView(APIView):
             traceback.print_exc()
             return Response(
                 {"status": "failed", "detail": f"摘要更新失败：{str(e)}"},
+                status=HTTP_400_BAD_REQUEST
+            )
+
+# ------------------- 会议分段工具函数 -------------------
+
+# 获取文件的转录文本
+def get_transcription(file):
+    """获取文件的转录文本"""
+    try:
+        transcription = Transcription.objects.get(file=file)
+        if not transcription.transcription_text:
+            return None, "逐字稿内容为空"
+        return transcription.transcription_text, None
+    except Transcription.DoesNotExist:
+        return None, "逐字稿不存在"
+
+# 获取音频/视频文件的时长（秒）
+def get_audio_duration(file_path):
+    """获取音频/视频文件的时长（秒）"""
+    try:
+        # 使用 ffprobe 命令获取文件信息
+        result = subprocess.run(
+            ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_format', file_path],
+            capture_output=True,
+            text=True
+        )
+        info = json.loads(result.stdout)
+        duration = float(info['format']['duration'])
+        return duration
+    except Exception as e:
+        print(f"获取文件时长失败: {e}")
+        return 3600  # 默认值，以防获取失败
+
+# 基于内容语义进行分段
+def segment_transcription(transcription_text, total_duration=3600):
+    """基于内容语义进行分段"""
+    import re
+    segments = []
+    
+    # 按句子分割
+    sentences = []
+    current_sentence = ""
+    for char in transcription_text:
+        current_sentence += char
+        if char in [".", "。", "!", "！", "?", "？"]:
+            sentences.append(current_sentence)
+            current_sentence = ""
+    if current_sentence:
+        sentences.append(current_sentence)
+    
+    # 按说话人分割
+    speaker_segments = []
+    current_speaker = None
+    current_content = []
+    current_start = 0.0
+    
+    for i, sentence in enumerate(sentences):
+        # 检测说话人
+        speaker_match = re.match(r'(.+?):\s', sentence)
+        if speaker_match:
+            speaker = speaker_match.group(1)
+            if speaker != current_speaker:
+                if current_content:
+                    # 计算时间范围
+                    end_time = (i / len(sentences)) * total_duration
+                    content = "".join(current_content)
+                    if content.strip():
+                        speaker_segments.append({
+                            "start_time": current_start,
+                            "end_time": end_time,
+                            "content": content,
+                            "speaker": current_speaker
+                        })
+                current_speaker = speaker
+                current_content = [sentence]
+                current_start = (i / len(sentences)) * total_duration
+            else:
+                current_content.append(sentence)
+        else:
+            current_content.append(sentence)
+    
+    # 添加最后一个说话人段落
+    if current_content:
+        end_time = total_duration
+        content = "".join(current_content)
+        if content.strip():
+            speaker_segments.append({
+                "start_time": current_start,
+                "end_time": end_time,
+                "content": content,
+                "speaker": current_speaker
+            })
+    
+    # 合并短段落
+    merged_segments = []
+    current_segment = None
+    
+    for segment in speaker_segments:
+        if not current_segment:
+            current_segment = segment.copy()
+        else:
+            # 如果当前段落较短，与下一段合并
+            if len(current_segment["content"]) < 200:
+                current_segment["content"] += segment["content"]
+                current_segment["end_time"] = segment["end_time"]
+            else:
+                merged_segments.append(current_segment)
+                current_segment = segment.copy()
+    
+    if current_segment:
+        merged_segments.append(current_segment)
+    
+    # 处理过长段落
+    final_segments = []
+    for segment in merged_segments:
+        if len(segment["content"]) > 600:
+            # 分割过长段落
+            content = segment["content"]
+            start_time = segment["start_time"]
+            end_time = segment["end_time"]
+            duration = end_time - start_time
+            
+            # 按句子分割
+            sub_sentences = []
+            current_sub_sentence = ""
+            for char in content:
+                current_sub_sentence += char
+                if char in [".", "。", "!", "！", "?", "？"]:
+                    sub_sentences.append(current_sub_sentence)
+                    current_sub_sentence = ""
+            if current_sub_sentence:
+                sub_sentences.append(current_sub_sentence)
+            
+            # 重新分段
+            sub_segment_start = start_time
+            sub_content = []
+            
+            for i, sub_sentence in enumerate(sub_sentences):
+                sub_content.append(sub_sentence)
+                sub_content_str = "".join(sub_content)
+                
+                if len(sub_content_str) > 400 or i == len(sub_sentences) - 1:
+                    sub_segment_end = start_time + (i + 1) / len(sub_sentences) * duration
+                    final_segments.append({
+                        "start_time": sub_segment_start,
+                        "end_time": sub_segment_end,
+                        "content": sub_content_str
+                    })
+                    sub_segment_start = sub_segment_end
+                    sub_content = []
+        else:
+            final_segments.append({
+                "start_time": segment["start_time"],
+                "end_time": segment["end_time"],
+                "content": segment["content"]
+            })
+    
+    return final_segments
+
+# 使用LLM优化分段并生成标题和总结
+def optimize_segments_with_llm(segments):
+    """使用LLM优化分段并生成标题和总结"""
+    optimized_segments = []
+    
+    for i, segment in enumerate(segments):
+        # 准备提示词，明确要求生成总结
+        prompt = f"请分析以下会议段落内容，完成以下任务：\n1. 检查段落边界是否合理，如果不合理，请调整\n2. 为段落生成一个简洁的小标题（不超过10字）\n3. 生成段落的核心内容总结，包含两部分：\n   a. 该段落的会议核心内容（核心）\n   b. 该段落中各成员的核心观点（辅助）\nc. 按时间轴梳理关键环节、核心发言与讨论过程\n\n要求：\n- 小标题：不超过10个字\n- 核心内容总结：100-250字\n- 用户名称必须严格按照原文，不能修改。\n\n段落内容：\n{segment['content']}\n\n开始时间：{segment['start_time']}秒\n结束时间：{segment['end_time']}秒\n\n请按照以下JSON格式返回结果：\n{{\n  \"title\": \"小标题\",\n  \"summary\": \"核心内容总结（包含会议核心内容和各成员核心观点）\",\n  \"is_boundary_reasonable\": true/false,\n  \"suggested_start_time\": 0.0,\n  \"suggested_end_time\": 0.0\n}}\n\n重要：\n1. 即使内容较短或质量不高，也必须生成标题和总结，不能为空。\n2. 总结应包含会议核心内容和各成员的核心观点，语言简洁客观、逻辑清晰。\n3. 小标题不超过10字，核心内容总结100-250字。\n4. 用户名称必须严格按照原文，不能修改。"
+        
+        # 调用LLM
+        try:
+            response = llm_client.chat.completions.create(
+                model=settings.LLM_CONFIG["model_name"],
+                messages=[
+                    {"role": "system", "content": "你是专业的会议分析助手，擅长分析会议内容并生成简洁的标题和总结。即使内容质量不高或较短，也能提取核心信息。"},
+                    {"role": "user", "content": prompt}
+                ],
+                stream=False,
+                temperature=0.3,
+                max_tokens=500,
+                timeout=30  # 添加超时设置
+            )
+            
+            # 解析LLM响应
+            try:
+                import json
+                result = json.loads(response.choices[0].message.content.strip())
+                
+                # 确保summary不为空
+                if not result.get("summary"):
+                    result["summary"] = "该段落主要讨论了相关内容。"
+                
+                optimized_segment = {
+                    "index": i,
+                    "start_time": result.get("suggested_start_time", segment["start_time"]),
+                    "end_time": result.get("suggested_end_time", segment["end_time"]),
+                    "title": result.get("title", f"段落{i+1}"),
+                    "content": segment["content"],
+                    "summary": result.get("summary", "该段落主要讨论了相关内容。"),
+                    "is_edited": False
+                }
+                optimized_segments.append(optimized_segment)
+            except Exception as e:
+                # 如果解析失败，使用默认值，但确保summary不为空
+                optimized_segment = {
+                    "index": i,
+                    "start_time": segment["start_time"],
+                    "end_time": segment["end_time"],
+                    "title": f"段落{i+1}",
+                    "content": segment["content"],
+                    "summary": "该段落主要讨论了相关内容。",
+                    "is_edited": False
+                }
+                optimized_segments.append(optimized_segment)
+        except Exception as e:
+            # 如果API调用失败，使用默认值，但确保summary不为空
+            print(f"LLM调用失败: {e}")
+            optimized_segment = {
+                "index": i,
+                "start_time": segment["start_time"],
+                "end_time": segment["end_time"],
+                "title": f"段落{i+1}",
+                "content": segment["content"],
+                "summary": "该段落主要讨论了相关内容。",
+                "is_edited": False
+            }
+            optimized_segments.append(optimized_segment)
+    
+    return optimized_segments
+
+# 批量使用LLM优化分段并生成标题和总结
+def optimize_segments_with_llm_batch(segments):
+    """批量使用LLM优化分段并生成标题和总结"""
+    if not segments:
+        return []
+    
+    # 准备批量处理的提示词
+    batch_prompt = "请分析以下会议段落内容，为每个段落完成以下任务：\n1. 检查段落边界是否合理\n2. 为段落生成一个简洁的小标题（不超过10字）\n3. 生成段落的核心内容总结，包含两部分：\n   a. 该段落的会议核心内容（核心）\n   b. 该段落中各成员的核心观点（辅助）\nc. 按时间轴梳理关键环节、核心发言与讨论过程\n\n要求：\n- 小标题：不超过10个字\n- 核心内容总结：100-250字\n\n"
+    
+    for i, segment in enumerate(segments):
+        batch_prompt += f"段落 {i+1}：\n内容：{segment['content']}\n开始时间：{segment['start_time']}秒\n结束时间：{segment['end_time']}秒\n\n"
+    
+    batch_prompt += "请按照以下格式返回每个段落的结果，每个段落一个JSON对象：\n[\n  {\n    \"index\": 0,\n    \"title\": \"小标题\",\n    \"summary\": \"核心内容总结（包含会议核心内容和各成员核心观点）\",\n    \"is_boundary_reasonable\": true,\n    \"suggested_start_time\": 0.0,\n    \"suggested_end_time\": 0.0\n  },\n  ...\n]\n\n重要：\n1. 每个段落都必须生成标题和总结，不能为空。\n2. 总结应包含会议核心内容和各成员的核心观点，语言简洁客观、逻辑清晰。\n3. 小标题不超过10字，核心内容总结100-250字。\n4. 用户名称必须严格按照原文，不能修改。"
+    
+    try:
+        # 调用LLM
+        response = llm_client.chat.completions.create(
+            model=settings.LLM_CONFIG["model_name"],
+            messages=[
+                {"role": "system", "content": "你是专业的会议分析助手，擅长分析会议内容并生成简洁的标题和总结。即使内容质量不高或较短，也能提取核心信息。"},
+                {"role": "user", "content": batch_prompt}
+            ],
+            stream=False,
+            temperature=0.3,
+            max_tokens=4000,
+            timeout=60
+        )
+        
+        # 解析响应
+        try:
+            import json
+            results = json.loads(response.choices[0].message.content.strip())
+            optimized_segments = []
+            
+            for i, result in enumerate(results):
+                if i < len(segments):
+                    optimized_segment = {
+                        "index": i,
+                        "start_time": result.get("suggested_start_time", segments[i]["start_time"]),
+                        "end_time": result.get("suggested_end_time", segments[i]["end_time"]),
+                        "title": result.get("title", f"段落{i+1}"),
+                        "content": segments[i]["content"],
+                        "summary": result.get("summary", "该段落主要讨论了相关内容。"),
+                        "is_edited": False
+                    }
+                    optimized_segments.append(optimized_segment)
+            return optimized_segments
+        except Exception as e:
+            print(f"解析LLM响应失败: {e}")
+            # 解析失败时，为每个分段生成默认值
+            optimized_segments = []
+            for i, segment in enumerate(segments):
+                optimized_segment = {
+                    "index": i,
+                    "start_time": segment["start_time"],
+                    "end_time": segment["end_time"],
+                    "title": f"段落{i+1}",
+                    "content": segment["content"],
+                    "summary": "该段落主要讨论了相关内容。",
+                    "is_edited": False
+                }
+                optimized_segments.append(optimized_segment)
+            return optimized_segments
+    except Exception as e:
+        print(f"LLM批量调用失败: {e}")
+        # API调用失败时，为每个分段生成默认值
+        optimized_segments = []
+        for i, segment in enumerate(segments):
+            optimized_segment = {
+                "index": i,
+                "start_time": segment["start_time"],
+                "end_time": segment["end_time"],
+                "title": f"段落{i+1}",
+                "content": segment["content"],
+                "summary": "该段落主要讨论了相关内容。",
+                "is_edited": False
+            }
+            optimized_segments.append(optimized_segment)
+        return optimized_segments
+
+# 存储分段数据到数据库
+def store_segments(file, user, segments):
+    """存储分段数据到数据库"""
+    # 先删除已存在的分段
+    MeetingSegment.objects.filter(file=file).delete()
+    
+    # 保存新的分段
+    for i, segment in enumerate(segments):
+        MeetingSegment.objects.create(
+            file=file,
+            user=user,
+            segment_index=i,
+            start_time=segment["start_time"],
+            end_time=segment["end_time"],
+            title=segment["title"],
+            content=segment["content"],
+            summary=segment["summary"],
+            is_edited=segment.get("is_edited", False)
+        )
+
+# 序列化分段数据
+def serialize_segments(segments):
+    """序列化分段数据"""
+    return [{
+        "id": segment.id,
+        "index": segment.segment_index,
+        "start_time": segment.start_time,
+        "end_time": segment.end_time,
+        "title": segment.title,
+        "summary": segment.summary,
+        "is_edited": segment.is_edited,
+        "created_at": segment.created_at.isoformat(),
+        "updated_at": segment.updated_at.isoformat()
+    } for segment in segments]
+
+# ------------------- 生成分段接口 -------------------
+@method_decorator(csrf_exempt, name='dispatch')
+class GenerateSegmentsView(APIView):
+    @method_decorator(require_auth)
+    def post(self, request):
+        """生成会议文件分段"""
+        try:
+            # 1. 提取请求参数
+            file_id = request.data.get("file_id")
+            force_update = request.data.get("force_update", False)
+            
+            # 2. 输入校验
+            if not file_id:
+                return Response(
+                    {"status": "failed", "detail": "文件ID不能为空"},
+                    status=HTTP_400_BAD_REQUEST
+                )
+            
+            # 3. 检查文件是否存在且属于当前用户
+            try:
+                file = UploadedFile.objects.get(id=file_id, user=request.user)
+            except UploadedFile.DoesNotExist:
+                return Response(
+                    {"status": "failed", "detail": "文件不存在或无权限"},
+                    status=HTTP_404_NOT_FOUND
+                )
+            
+            # 4. 检查是否已存在分段数据
+            existing_segments = MeetingSegment.objects.filter(file=file)
+            if existing_segments.exists() and not force_update:
+                return Response({
+                    "status": "success",
+                    "detail": "分段数据已存在",
+                    "segments": serialize_segments(existing_segments),
+                    "total_segments": existing_segments.count(),
+                    "generated_at": existing_segments.first().created_at.isoformat()
+                }, status=HTTP_200_OK)
+            
+            # 5. 获取转录文本
+            transcription_text, error = get_transcription(file)
+            if not transcription_text:
+                return Response(
+                    {"status": "failed", "detail": error},
+                    status=HTTP_404_NOT_FOUND
+                )
+            
+            # 6. 获取文件实际时长
+            file_path = os.path.join(settings.FILE_UPLOAD_DIR, file.stored_name)
+            total_duration = get_audio_duration(file_path)
+            
+            # 7. 初步分段（使用基于内容语义的分段）
+            initial_segments = segment_transcription(transcription_text, total_duration=total_duration)
+            
+            # 8. LLM优化（使用批量处理）
+            optimized_segments = optimize_segments_with_llm_batch(initial_segments)
+            
+            # 8. 存储分段数据
+            store_segments(file, request.user, optimized_segments)
+            
+            # 9. 获取存储后的分段数据
+            stored_segments = MeetingSegment.objects.filter(file=file)
+            
+            return Response({
+                "status": "success",
+                "detail": "分段生成成功",
+                "segments": serialize_segments(stored_segments),
+                "total_segments": stored_segments.count(),
+                "generated_at": stored_segments.first().created_at.isoformat()
+            }, status=HTTP_200_OK)
+        
+        except Exception as e:
+            traceback.print_exc()
+            return Response(
+                {"status": "failed", "detail": f"生成分段失败：{str(e)}"},
+                status=HTTP_400_BAD_REQUEST
+            )
+
+# ------------------- 获取分段列表接口 -------------------
+@method_decorator(csrf_exempt, name='dispatch')
+class SegmentsListView(APIView):
+    @method_decorator(require_auth)
+    def get(self, request):
+        """获取会议文件分段列表"""
+        try:
+            # 1. 提取请求参数
+            file_id = request.query_params.get("file_id")
+            
+            # 2. 输入校验
+            if not file_id:
+                return Response(
+                    {"status": "failed", "detail": "文件ID不能为空"},
+                    status=HTTP_400_BAD_REQUEST
+                )
+            
+            # 3. 检查文件是否存在且属于当前用户
+            try:
+                file = UploadedFile.objects.get(id=file_id, user=request.user)
+            except UploadedFile.DoesNotExist:
+                return Response(
+                    {"status": "failed", "detail": "文件不存在或无权限"},
+                    status=HTTP_404_NOT_FOUND
+                )
+            
+            # 4. 获取分段数据
+            segments = MeetingSegment.objects.filter(file=file).order_by("segment_index")
+            
+            if not segments.exists():
+                return Response(
+                    {"status": "failed", "detail": "分段数据不存在"},
+                    status=HTTP_404_NOT_FOUND
+                )
+            
+            return Response({
+                "status": "success",
+                "segments": serialize_segments(segments),
+                "total_segments": segments.count(),
+                "generated_at": segments.first().created_at.isoformat()
+            }, status=HTTP_200_OK)
+        
+        except Exception as e:
+            traceback.print_exc()
+            return Response(
+                {"status": "failed", "detail": f"获取分段失败：{str(e)}"},
+                status=HTTP_400_BAD_REQUEST
+            )
+
+# ------------------- 编辑分段接口 -------------------
+@method_decorator(csrf_exempt, name='dispatch')
+class SegmentUpdateView(APIView):
+    @method_decorator(require_auth)
+    def put(self, request, segment_id):
+        """编辑会议分段"""
+        try:
+            # 1. 提取请求参数
+            title = request.data.get("title", "").strip()
+            summary = request.data.get("summary", "").strip()
+            start_time = request.data.get("start_time")
+            end_time = request.data.get("end_time")
+            
+            # 2. 输入校验
+            if not title:
+                return Response(
+                    {"status": "failed", "detail": "小标题不能为空"},
+                    status=HTTP_400_BAD_REQUEST
+                )
+            
+            # 时间戳校验
+            if start_time is not None or end_time is not None:
+                try:
+                    if start_time is not None:
+                        start_time = float(start_time)
+                    if end_time is not None:
+                        end_time = float(end_time)
+                    if start_time is not None and end_time is not None and start_time >= end_time:
+                        return Response(
+                            {"status": "failed", "detail": "开始时间必须小于结束时间"},
+                            status=HTTP_400_BAD_REQUEST
+                        )
+                except (ValueError, TypeError):
+                    return Response(
+                        {"status": "failed", "detail": "时间戳必须是有效的数字"},
+                        status=HTTP_400_BAD_REQUEST
+                    )
+            
+            # 3. 检查分段是否存在且属于当前用户
+            try:
+                segment = MeetingSegment.objects.get(id=segment_id)
+                # 验证文件权限
+                if segment.file.user != request.user:
+                    return Response(
+                        {"status": "failed", "detail": "分段不存在或无权限"},
+                        status=HTTP_404_NOT_FOUND
+                    )
+                
+                # 获取文件时长
+                file = segment.file
+                # 尝试从file对象获取duration，如果没有则计算
+                file_duration = getattr(file, 'duration', 0)
+                if file_duration <= 0:
+                    # 如果没有duration字段或值为0，尝试计算文件时长
+                    import os
+                    file_path = os.path.join(settings.FILE_UPLOAD_DIR, file.stored_name)
+                    file_duration = get_audio_duration(file_path)
+            except MeetingSegment.DoesNotExist:
+                return Response(
+                    {"status": "failed", "detail": "分段不存在或无权限"},
+                    status=HTTP_404_NOT_FOUND
+                )
+            
+            # 4. 时间戳范围校验
+            if start_time is not None or end_time is not None:
+                if start_time is not None and (start_time < 0 or start_time > file_duration):
+                    return Response(
+                        {"status": "failed", "detail": f"开始时间必须在0到{file_duration}秒之间"},
+                        status=HTTP_400_BAD_REQUEST
+                    )
+                if end_time is not None and (end_time < 0 or end_time > file_duration):
+                    return Response(
+                        {"status": "failed", "detail": f"结束时间必须在0到{file_duration}秒之间"},
+                        status=HTTP_400_BAD_REQUEST
+                    )
+            
+            # 5. 更新分段（不更新content）
+            segment.title = title
+            segment.summary = summary
+            if start_time is not None:
+                segment.start_time = start_time
+            if end_time is not None:
+                segment.end_time = end_time
+            segment.is_edited = True
+            segment.save()
+            
+            return Response({
+                "status": "success",
+                "detail": "分段更新成功",
+                "segment": {
+                    "id": segment.id,
+                    "index": segment.segment_index,
+                    "start_time": segment.start_time,
+                    "end_time": segment.end_time,
+                    "title": segment.title,
+                    "summary": segment.summary,
+                    "is_edited": segment.is_edited,
+                    "updated_at": segment.updated_at.isoformat()
+                }
+            }, status=HTTP_200_OK)
+        
+        except Exception as e:
+            traceback.print_exc()
+            return Response(
+                {"status": "failed", "detail": f"更新分段失败：{str(e)}"},
                 status=HTTP_400_BAD_REQUEST
             )

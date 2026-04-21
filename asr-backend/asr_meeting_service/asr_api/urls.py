@@ -12,6 +12,9 @@ from .views import (
     MeetingAbstractUpdateView,
     GetMeetingSummaryView,
     GetMeetingAbstractView,
+    GenerateSegmentsView,
+    SegmentsListView,
+    SegmentUpdateView,
     # Word导出接口
     ExportTranscriptionWordView,
     ExportSummaryWordView,
@@ -44,6 +47,8 @@ from .views import (
     PromptUpdateView,
     PromptDeleteView,
     PromptCopyView,
+    # 会议分析接口
+    MeetingAnalysisView,
 )
 
 urlpatterns = [
@@ -61,6 +66,10 @@ urlpatterns = [
     path("meeting/abstract/update", MeetingAbstractUpdateView.as_view(), name="meeting-abstract-update"),    # 会议摘要编辑
     path("meeting/summary/get", GetMeetingSummaryView.as_view(), name="meeting-summary-get"),    # 获取会议纪要
     path("meeting/abstract/get", GetMeetingAbstractView.as_view(), name="meeting-abstract-get"),    # 获取会议摘要
+    path("meeting/segments/generate", GenerateSegmentsView.as_view(), name="meeting-segments-generate"),    # 生成分段
+    path("meeting/segments/list", SegmentsListView.as_view(), name="meeting-segments-list"),    # 获取分段列表
+    path("meeting/segments/update/<int:segment_id>", SegmentUpdateView.as_view(), name="meeting-segment-update"),    # 编辑分段
+    path("meeting/analysis/<int:file_id>", MeetingAnalysisView.as_view(), name="meeting-analysis"),    # 会议分析
     
     # Word导出接口
     path('export_transcription_word', ExportTranscriptionWordView.as_view(), name='export-transcription-word'),    # Word导出（转录文本）

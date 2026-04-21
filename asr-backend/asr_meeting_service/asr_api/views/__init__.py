@@ -2,7 +2,7 @@
 from .base import HealthCheckView
 from .asr import ASRTranscribeView
 from .video import VideoASRTranscribeView
-from .meeting import MeetingSummaryView, MeetingAbstractView, MeetingSummaryUpdateView, MeetingAbstractUpdateView, GetMeetingSummaryView, GetMeetingAbstractView
+from .meeting import MeetingSummaryView, MeetingAbstractView, MeetingSummaryUpdateView, MeetingAbstractUpdateView, GetMeetingSummaryView, GetMeetingAbstractView, GenerateSegmentsView, SegmentsListView, SegmentUpdateView
 from .export import ExportTranscriptionWordView, ExportSummaryWordView, ExportAbstractWordView
 from .voiceprint import VoiceprintAddView, VoiceprintListView, VoiceprintRenameView, VoiceprintDeleteView
 from .user import UserRegisterView, UserLoginView, UserLogoutView, UserProfileView
@@ -10,6 +10,7 @@ from .file import FileUploadView, FileListView, FileRenameView, FileDeleteView
 from .transcription import TranscriptionSearchView, TranscriptionGetView, TranscriptionEditView, TranscriptionGenerateView
 from .upload_transcribe import FileUploadTranscribeView
 from .prompt import PromptListView, PromptAddView, PromptUpdateView, PromptDeleteView, PromptCopyView
+from .meeting_analysis import MeetingAnalysisView
 
 __all__ = [
     # 基础
@@ -25,6 +26,9 @@ __all__ = [
     'MeetingAbstractUpdateView',
     'GetMeetingSummaryView',
     'GetMeetingAbstractView',
+    'GenerateSegmentsView',
+    'SegmentsListView',
+    'SegmentUpdateView',
     # 导出-export
     'ExportTranscriptionWordView',
     'ExportSummaryWordView',
@@ -57,4 +61,6 @@ __all__ = [
     'PromptUpdateView',
     'PromptDeleteView',
     'PromptCopyView',
+    # 会议分析-meeting_analysis
+    'MeetingAnalysisView',
 ]

@@ -178,3 +178,35 @@ class MeetingSummary(models.Model):
     class Meta:
         verbose_name = "会议纪要"
         verbose_name_plural = "会议纪要"
+
+# 会议分段模型
+class MeetingSegment(models.Model):
+    """会议分段时间轴核心模型"""
+    file = models.ForeignKey(
+        UploadedFile,
+        on_delete=models.CASCADE,
+        related_name="meeting_segments",
+        verbose_name="关联会议文件"
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        verbose_name="所属用户"
+    )
+    segment_index = models.IntegerField(verbose_name="段落序号")
+    start_time = models.FloatField(verbose_name="开始时间(秒)")
+    end_time = models.FloatField(verbose_name="结束时间(秒)")
+    title = models.CharField(max_length=100, verbose_name="段落小标题")
+    content = models.TextField(verbose_name="段落原文内容")
+    summary = models.TextField(verbose_name="段落核心总结")
+    is_edited = models.BooleanField(default=False, verbose_name="是否用户手动编辑")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["segment_index"]
+        verbose_name = "会议分段"
+        verbose_name_plural = "会议分段列表"
+
+    def __str__(self):
+        return f"{self.segment_index} - {self.title}"
