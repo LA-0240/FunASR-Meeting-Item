@@ -3,14 +3,14 @@ from .base import HealthCheckView
 from .asr import ASRTranscribeView
 from .video import VideoASRTranscribeView
 from .meeting import MeetingSummaryView, MeetingAbstractView, MeetingSummaryUpdateView, MeetingAbstractUpdateView, GetMeetingSummaryView, GetMeetingAbstractView, GenerateSegmentsView, SegmentsListView, SegmentUpdateView
+from .meeting_analysis import MeetingAnalysisView
 from .export import ExportTranscriptionWordView, ExportSummaryWordView, ExportAbstractWordView
-from .voiceprint import VoiceprintAddView, VoiceprintListView, VoiceprintRenameView, VoiceprintDeleteView
+from .voiceprint import VoiceprintAddView, VoiceprintListView, VoiceprintRenameView, VoiceprintDeleteView, VoiceprintAudioView
 from .user import UserRegisterView, UserLoginView, UserLogoutView, UserProfileView
-from .file import FileUploadView, FileListView, FileRenameView, FileDeleteView
+from .file import FileUploadView, FileListView, FileRenameView, FileDeleteView, FileDownloadView
 from .transcription import TranscriptionSearchView, TranscriptionGetView, TranscriptionEditView, TranscriptionGenerateView
 from .upload_transcribe import FileUploadTranscribeView
 from .prompt import PromptListView, PromptAddView, PromptUpdateView, PromptDeleteView, PromptCopyView
-from .meeting_analysis import MeetingAnalysisView
 
 __all__ = [
     # 基础
@@ -38,6 +38,7 @@ __all__ = [
     'VoiceprintListView',
     'VoiceprintRenameView',
     'VoiceprintDeleteView',
+    'VoiceprintAudioView',
     # 用户管理-user
     'UserRegisterView',
     'UserLoginView',
@@ -48,6 +49,7 @@ __all__ = [
     'FileListView',
     'FileRenameView',
     'FileDeleteView',
+    'FileDownloadView',
     # 逐字稿-transcription
     'TranscriptionSearchView',
     'TranscriptionGetView',

@@ -163,7 +163,8 @@ class MeetingSummaryView(APIView):
                 ],
                 stream=False,
                 temperature=0.3,
-                max_tokens=4000
+                max_tokens=4000,
+                timeout=300
             )
             
             # 8. 提取结果
@@ -352,7 +353,8 @@ class MeetingAbstractView(APIView):
                 ],
                 stream=False,
                 temperature=0.2,  # 更低的温度保证摘要的准确性
-                max_tokens=1000
+                max_tokens=1000,
+                timeout=300
             )
             
             # 8. 提取结果
@@ -626,34 +628,55 @@ class MeetingAbstractUpdateView(APIView):
 # 获取文件的转录文本
 def get_transcription(file):
     """获取文件的转录文本"""
+    print(f"[DEBUG] 获取文件转录文本 - 文件ID: {file.id}, 文件名: {file.original_name}")
     try:
         transcription = Transcription.objects.get(file=file)
         if not transcription.transcription_text:
+            print(f"[DEBUG] 转录文本为空")
             return None, "逐字稿内容为空"
+        print(f"[DEBUG] 转录文本长度: {len(transcription.transcription_text)}")
         return transcription.transcription_text, None
     except Transcription.DoesNotExist:
+        print(f"[DEBUG] 转录文本不存在")
         return None, "逐字稿不存在"
 
 # 获取音频/视频文件的时长（秒）
 def get_audio_duration(file_path):
     """获取音频/视频文件的时长（秒）"""
+    print(f"[DEBUG] 获取文件时长 - 文件路径: {file_path}")
     try:
+        # 检查文件是否存在
+        import os
+        if not os.path.exists(file_path):
+            print(f"[DEBUG] 文件不存在: {file_path}")
+            return 3600
+        
         # 使用 ffprobe 命令获取文件信息
+        print(f"[DEBUG] 执行 ffprobe 命令")
         result = subprocess.run(
             ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_format', file_path],
             capture_output=True,
             text=True
         )
+        
+        print(f"[DEBUG] ffprobe 返回码: {result.returncode}")
+        if result.stderr:
+            print(f"[DEBUG] ffprobe 错误输出: {result.stderr}")
+        
         info = json.loads(result.stdout)
         duration = float(info['format']['duration'])
+        print(f"[DEBUG] 文件时长: {duration} 秒")
         return duration
     except Exception as e:
-        print(f"获取文件时长失败: {e}")
+        print(f"[DEBUG] 获取文件时长失败: {e}")
+        import traceback
+        print(f"[DEBUG] 错误堆栈: {traceback.format_exc()}")
         return 3600  # 默认值，以防获取失败
 
 # 基于内容语义进行分段
 def segment_transcription(transcription_text, total_duration=3600):
     """基于内容语义进行分段"""
+    print(f"[DEBUG] 开始语义分段 - 总时长: {total_duration} 秒")
     import re
     segments = []
     
@@ -775,19 +798,29 @@ def segment_transcription(transcription_text, total_duration=3600):
                 "content": segment["content"]
             })
     
+    print(f"[DEBUG] 语义分段完成，共 {len(final_segments)} 个分段")
+    for i, seg in enumerate(final_segments):
+        print(f"[DEBUG] 分段 {i+1}: {seg['start_time']}s - {seg['end_time']}s, 内容长度: {len(seg['content'])}")
     return final_segments
 
 # 使用LLM优化分段并生成标题和总结
 def optimize_segments_with_llm(segments):
     """使用LLM优化分段并生成标题和总结"""
+    print(f"[DEBUG] 开始使用单个LLM处理分段，共 {len(segments)} 个")
     optimized_segments = []
     
     for i, segment in enumerate(segments):
+        print(f"[DEBUG] 处理分段 {i+1}/{len(segments)}")
         # 准备提示词，明确要求生成总结
         prompt = f"请分析以下会议段落内容，完成以下任务：\n1. 检查段落边界是否合理，如果不合理，请调整\n2. 为段落生成一个简洁的小标题（不超过10字）\n3. 生成段落的核心内容总结，包含两部分：\n   a. 该段落的会议核心内容（核心）\n   b. 该段落中各成员的核心观点（辅助）\nc. 按时间轴梳理关键环节、核心发言与讨论过程\n\n要求：\n- 小标题：不超过10个字\n- 核心内容总结：100-250字\n- 用户名称必须严格按照原文，不能修改。\n\n段落内容：\n{segment['content']}\n\n开始时间：{segment['start_time']}秒\n结束时间：{segment['end_time']}秒\n\n请按照以下JSON格式返回结果：\n{{\n  \"title\": \"小标题\",\n  \"summary\": \"核心内容总结（包含会议核心内容和各成员核心观点）\",\n  \"is_boundary_reasonable\": true/false,\n  \"suggested_start_time\": 0.0,\n  \"suggested_end_time\": 0.0\n}}\n\n重要：\n1. 即使内容较短或质量不高，也必须生成标题和总结，不能为空。\n2. 总结应包含会议核心内容和各成员的核心观点，语言简洁客观、逻辑清晰。\n3. 小标题不超过10字，核心内容总结100-250字。\n4. 用户名称必须严格按照原文，不能修改。"
         
+        print(f"[DEBUG] 分段 {i+1} 提示词长度: {len(prompt)}")
+        
         # 调用LLM
         try:
+            print(f"[DEBUG] 分段 {i+1} 开始调用LLM")
+            print(f"[DEBUG] LLM配置 - 模型: {settings.LLM_CONFIG['model_name']}, API密钥: {'*'*10}{settings.LLM_CONFIG['api_key'][-5:] if settings.LLM_CONFIG['api_key'] else '未设置'}")
+            
             response = llm_client.chat.completions.create(
                 model=settings.LLM_CONFIG["model_name"],
                 messages=[
@@ -797,13 +830,19 @@ def optimize_segments_with_llm(segments):
                 stream=False,
                 temperature=0.3,
                 max_tokens=500,
-                timeout=30  # 添加超时设置
+                timeout=120  # 增加超时设置
             )
+            print(f"[DEBUG] 分段 {i+1} LLM调用成功")
             
             # 解析LLM响应
             try:
                 import json
-                result = json.loads(response.choices[0].message.content.strip())
+                llm_response = response.choices[0].message.content.strip()
+                print(f"[DEBUG] 分段 {i+1} LLM返回内容长度: {len(llm_response)}")
+                print(f"[DEBUG] 分段 {i+1} LLM返回内容: {llm_response[:200]}..." if len(llm_response) > 200 else f"[DEBUG] 分段 {i+1} LLM返回内容: {llm_response}")
+                
+                result = json.loads(llm_response)
+                print(f"[DEBUG] 分段 {i+1} 解析成功 - 标题: {result.get('title')}, 摘要: {result.get('summary', '')[:50]}...")
                 
                 # 确保summary不为空
                 if not result.get("summary"):
@@ -820,6 +859,9 @@ def optimize_segments_with_llm(segments):
                 }
                 optimized_segments.append(optimized_segment)
             except Exception as e:
+                print(f"[DEBUG] 分段 {i+1} 解析失败: {e}")
+                import traceback
+                print(f"[DEBUG] 错误堆栈: {traceback.format_exc()}")
                 # 如果解析失败，使用默认值，但确保summary不为空
                 optimized_segment = {
                     "index": i,
@@ -833,7 +875,9 @@ def optimize_segments_with_llm(segments):
                 optimized_segments.append(optimized_segment)
         except Exception as e:
             # 如果API调用失败，使用默认值，但确保summary不为空
-            print(f"LLM调用失败: {e}")
+            print(f"[DEBUG] 分段 {i+1} LLM调用失败: {e}")
+            import traceback
+            print(f"[DEBUG] 错误堆栈: {traceback.format_exc()}")
             optimized_segment = {
                 "index": i,
                 "start_time": segment["start_time"],
@@ -845,12 +889,16 @@ def optimize_segments_with_llm(segments):
             }
             optimized_segments.append(optimized_segment)
     
+    print(f"[DEBUG] 单个LLM处理完成，共 {len(optimized_segments)} 个分段")
     return optimized_segments
 
 # 批量使用LLM优化分段并生成标题和总结
 def optimize_segments_with_llm_batch(segments):
     """批量使用LLM优化分段并生成标题和总结"""
+    print(f"[DEBUG] ========== 开始批量LLM处理 ==========")
+    print(f"[DEBUG] 待处理的分段数量: {len(segments)}")
     if not segments:
+        print(f"[DEBUG] 没有分段需要处理")
         return []
     
     # 准备批量处理的提示词
@@ -861,8 +909,12 @@ def optimize_segments_with_llm_batch(segments):
     
     batch_prompt += "请按照以下格式返回每个段落的结果，每个段落一个JSON对象：\n[\n  {\n    \"index\": 0,\n    \"title\": \"小标题\",\n    \"summary\": \"核心内容总结（包含会议核心内容和各成员核心观点）\",\n    \"is_boundary_reasonable\": true,\n    \"suggested_start_time\": 0.0,\n    \"suggested_end_time\": 0.0\n  },\n  ...\n]\n\n重要：\n1. 每个段落都必须生成标题和总结，不能为空。\n2. 总结应包含会议核心内容和各成员的核心观点，语言简洁客观、逻辑清晰。\n3. 小标题不超过10字，核心内容总结100-250字。\n4. 用户名称必须严格按照原文，不能修改。"
     
+    print(f"[DEBUG] 批量提示词长度: {len(batch_prompt)}")
+    print(f"[DEBUG] LLM配置 - 模型: {settings.LLM_CONFIG['model_name']}, API密钥: {'*'*10}{settings.LLM_CONFIG['api_key'][-5:] if settings.LLM_CONFIG['api_key'] else '未设置'}, Base URL: {settings.LLM_CONFIG.get('base_url', '未设置')}")
+    
     try:
         # 调用LLM
+        print(f"[DEBUG] ========== 开始调用批量LLM API ==========")
         response = llm_client.chat.completions.create(
             model=settings.LLM_CONFIG["model_name"],
             messages=[
@@ -872,17 +924,25 @@ def optimize_segments_with_llm_batch(segments):
             stream=False,
             temperature=0.3,
             max_tokens=4000,
-            timeout=60
+            timeout=300
         )
+        print(f"[DEBUG] ========== 批量LLM API调用成功 ==========")
         
         # 解析响应
         try:
             import json
-            results = json.loads(response.choices[0].message.content.strip())
+            llm_response = response.choices[0].message.content.strip()
+            print(f"[DEBUG] LLM返回内容长度: {len(llm_response)}")
+            print(f"[DEBUG] LLM返回内容: {llm_response[:500]}..." if len(llm_response) > 500 else f"[DEBUG] LLM返回内容: {llm_response}")
+            
+            results = json.loads(llm_response)
+            print(f"[DEBUG] 解析到 {len(results)} 个结果")
+            
             optimized_segments = []
             
             for i, result in enumerate(results):
                 if i < len(segments):
+                    print(f"[DEBUG] 处理结果 {i+1} - 标题: {result.get('title')}, 摘要: {result.get('summary', '')[:50]}...")
                     optimized_segment = {
                         "index": i,
                         "start_time": result.get("suggested_start_time", segments[i]["start_time"]),
@@ -893,10 +953,15 @@ def optimize_segments_with_llm_batch(segments):
                         "is_edited": False
                     }
                     optimized_segments.append(optimized_segment)
+            print(f"[DEBUG] ========== 批量LLM处理成功，共 {len(optimized_segments)} 个分段 ==========")
             return optimized_segments
         except Exception as e:
-            print(f"解析LLM响应失败: {e}")
+            print(f"[DEBUG] ========== 解析LLM响应失败 ==========")
+            print(f"[DEBUG] 错误信息: {e}")
+            import traceback
+            print(f"[DEBUG] 错误堆栈: {traceback.format_exc()}")
             # 解析失败时，为每个分段生成默认值
+            print(f"[DEBUG] 使用默认值代替")
             optimized_segments = []
             for i, segment in enumerate(segments):
                 optimized_segment = {
@@ -911,30 +976,28 @@ def optimize_segments_with_llm_batch(segments):
                 optimized_segments.append(optimized_segment)
             return optimized_segments
     except Exception as e:
-        print(f"LLM批量调用失败: {e}")
-        # API调用失败时，为每个分段生成默认值
-        optimized_segments = []
-        for i, segment in enumerate(segments):
-            optimized_segment = {
-                "index": i,
-                "start_time": segment["start_time"],
-                "end_time": segment["end_time"],
-                "title": f"段落{i+1}",
-                "content": segment["content"],
-                "summary": "该段落主要讨论了相关内容。",
-                "is_edited": False
-            }
-            optimized_segments.append(optimized_segment)
-        return optimized_segments
+        print(f"[DEBUG] ========== LLM批量调用失败 ==========")
+        print(f"[DEBUG] 错误信息: {e}")
+        import traceback
+        print(f"[DEBUG] 错误堆栈: {traceback.format_exc()}")
+        # 批量处理失败时，回退到逐个处理
+        print(f"[DEBUG] ========== 回退到逐个处理 ==========")
+        return optimize_segments_with_llm(segments)
 
 # 存储分段数据到数据库
 def store_segments(file, user, segments):
     """存储分段数据到数据库"""
+    print(f"[DEBUG] ========== 开始存储分段数据 ==========")
+    print(f"[DEBUG] 文件ID: {file.id}, 用户ID: {user.id}, 待存储分段数: {len(segments)}")
+    
     # 先删除已存在的分段
+    print(f"[DEBUG] 删除旧分段数据")
     MeetingSegment.objects.filter(file=file).delete()
     
     # 保存新的分段
+    print(f"[DEBUG] 开始保存新分段")
     for i, segment in enumerate(segments):
+        print(f"[DEBUG] 保存分段 {i+1}/{len(segments)} - 标题: {segment['title']}")
         MeetingSegment.objects.create(
             file=file,
             user=user,
@@ -946,6 +1009,7 @@ def store_segments(file, user, segments):
             summary=segment["summary"],
             is_edited=segment.get("is_edited", False)
         )
+    print(f"[DEBUG] ========== 分段数据存储完成 ==========")
 
 # 序列化分段数据
 def serialize_segments(segments):
@@ -968,13 +1032,17 @@ class GenerateSegmentsView(APIView):
     @method_decorator(require_auth)
     def post(self, request):
         """生成会议文件分段"""
+        print(f"[DEBUG] ========== 开始生成分段 ==========")
+        print(f"[DEBUG] 请求参数: {request.data}")
         try:
             # 1. 提取请求参数
             file_id = request.data.get("file_id")
             force_update = request.data.get("force_update", False)
+            print(f"[DEBUG] 文件ID: {file_id}, 强制更新: {force_update}")
             
             # 2. 输入校验
             if not file_id:
+                print(f"[DEBUG] 文件ID为空")
                 return Response(
                     {"status": "failed", "detail": "文件ID不能为空"},
                     status=HTTP_400_BAD_REQUEST
@@ -982,8 +1050,11 @@ class GenerateSegmentsView(APIView):
             
             # 3. 检查文件是否存在且属于当前用户
             try:
+                print(f"[DEBUG] 查询文件信息")
                 file = UploadedFile.objects.get(id=file_id, user=request.user)
+                print(f"[DEBUG] 文件信息 - 原始名称: {file.original_name}, 存储名称: {file.stored_name}, 文件类型: {file.file_type}")
             except UploadedFile.DoesNotExist:
+                print(f"[DEBUG] 文件不存在或无权限")
                 return Response(
                     {"status": "failed", "detail": "文件不存在或无权限"},
                     status=HTTP_404_NOT_FOUND
@@ -992,6 +1063,7 @@ class GenerateSegmentsView(APIView):
             # 4. 检查是否已存在分段数据
             existing_segments = MeetingSegment.objects.filter(file=file)
             if existing_segments.exists() and not force_update:
+                print(f"[DEBUG] 分段数据已存在，直接返回")
                 return Response({
                     "status": "success",
                     "detail": "分段数据已存在",
@@ -1000,9 +1072,12 @@ class GenerateSegmentsView(APIView):
                     "generated_at": existing_segments.first().created_at.isoformat()
                 }, status=HTTP_200_OK)
             
+            print(f"[DEBUG] 开始生成分段 - 是否强制更新: {force_update}")
+            
             # 5. 获取转录文本
             transcription_text, error = get_transcription(file)
             if not transcription_text:
+                print(f"[DEBUG] 获取转录文本失败: {error}")
                 return Response(
                     {"status": "failed", "detail": error},
                     status=HTTP_404_NOT_FOUND
@@ -1010,20 +1085,26 @@ class GenerateSegmentsView(APIView):
             
             # 6. 获取文件实际时长
             file_path = os.path.join(settings.FILE_UPLOAD_DIR, file.stored_name)
+            print(f"[DEBUG] 文件完整路径: {file_path}")
             total_duration = get_audio_duration(file_path)
             
             # 7. 初步分段（使用基于内容语义的分段）
+            print(f"[DEBUG] 开始语义分段")
             initial_segments = segment_transcription(transcription_text, total_duration=total_duration)
             
             # 8. LLM优化（使用批量处理）
+            print(f"[DEBUG] 开始LLM优化")
             optimized_segments = optimize_segments_with_llm_batch(initial_segments)
             
             # 8. 存储分段数据
             store_segments(file, request.user, optimized_segments)
             
             # 9. 获取存储后的分段数据
+            print(f"[DEBUG] 查询存储后的分段数据")
             stored_segments = MeetingSegment.objects.filter(file=file)
+            print(f"[DEBUG] 共存储 {stored_segments.count()} 个分段")
             
+            print(f"[DEBUG] ========== 分段生成完成 ==========")
             return Response({
                 "status": "success",
                 "detail": "分段生成成功",
@@ -1031,8 +1112,9 @@ class GenerateSegmentsView(APIView):
                 "total_segments": stored_segments.count(),
                 "generated_at": stored_segments.first().created_at.isoformat()
             }, status=HTTP_200_OK)
-        
         except Exception as e:
+            print(f"[DEBUG] ========== 分段生成失败 ==========")
+            print(f"[DEBUG] 错误信息: {e}")
             traceback.print_exc()
             return Response(
                 {"status": "failed", "detail": f"生成分段失败：{str(e)}"},

@@ -1,22 +1,27 @@
+<script setup>
+// App.vue
+</script>
+
 <template>
-  <!-- 路由出口：所有路由匹配的组件都会渲染在这里 -->
   <router-view />
 </template>
 
-<script setup>
-// 无需额外代码，仅作为路由容器
-</script>
-
 <style>
-/* 全局样式重置 */
+/* 全局样式 */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-body {
-  font-family: "Microsoft YaHei", sans-serif;
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #333;
   background-color: #f5f5f5;
 }
 </style>

@@ -24,6 +24,7 @@ from .views import (
     VoiceprintListView,
     VoiceprintRenameView,
     VoiceprintDeleteView,
+    VoiceprintAudioView,
     # 用户管理接口
     UserRegisterView,
     UserLoginView,
@@ -34,6 +35,7 @@ from .views import (
     FileListView,
     FileRenameView,
     FileDeleteView,
+    FileDownloadView,
     # 逐字稿接口
     TranscriptionSearchView,
     TranscriptionGetView,
@@ -81,6 +83,7 @@ urlpatterns = [
     path('voiceprint/list', VoiceprintListView.as_view(), name='voiceprint-list'), # 声纹列表
     path('voiceprint/rename', VoiceprintRenameView.as_view(), name='voiceprint-rename'), # 声纹重命名
     path('voiceprint/delete', VoiceprintDeleteView.as_view(), name='voiceprint-delete'), # 声纹删除
+    path('voiceprint/audio/<int:vp_id>', VoiceprintAudioView.as_view(), name='voiceprint-audio'), # 声纹音频文件获取
 
     # 用户接口
     path('user/register', UserRegisterView.as_view(), name='user-register'), # 用户注册
@@ -93,6 +96,7 @@ urlpatterns = [
     path('file/list', FileListView.as_view(), name='file-list'), # 文件列表
     path('file/rename', FileRenameView.as_view(), name='file-rename'), # 文件重命名
     path('file/delete', FileDeleteView.as_view(), name='file-delete'), # 文件删除
+    path('file/download/<int:file_id>', FileDownloadView.as_view(), name='file-download'), # 文件下载
     
     # 逐字稿接口
     path('transcription/search', TranscriptionSearchView.as_view(), name='transcription-search'), # 逐字稿搜索

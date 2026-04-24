@@ -1,55 +1,38 @@
-import axios from 'axios'
+import api from './index';
 
-// 统一设置基础URL（避免硬编码，和现有ASR接口保持一致）
-axios.defaults.baseURL = '' // 若ASR接口有baseURL，此处保持一致
+// 声纹管理相关API
+export const voiceprintApi = {
+  // 添加声纹
+  add: (file, name) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('name', name);
+    return api.post('/voiceprint/add', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+  },
 
-/**
- * 声纹注册
- * @param {FormData} formData 包含音频文件的表单数据
- * @returns {Promise}
- */
-export const addVoiceprint = async (formData) => {
-  return axios.post('/voiceprint/add', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data'
-    }
-  })
-}
+  // 获取声纹列表
+  getList: (name = '') => {
+    return api.get('/voiceprint/list', { params: { name } });
+  },
 
-/**
- * 声纹列表查询
- * @param {Object} params 可选查询参数
- * @returns {Promise}
- */
-export const getVoiceprintList = async (params = {}) => {
-  try {
-    const res = await axios.get('/voiceprint/list', { params })
-    console.log('获取声纹列表接口响应：', res)
-    // 强制兜底：确保返回数组（适配接口返回 {data: []} 或直接返回 [] 两种情况）
-    return {
-      data: Array.isArray(res.data?.voiceprints) ? res.data.voiceprints : []
-    }
-  } catch (error) {
-    // 异常兜底：返回空数组，避免表格无数据时报错
-    console.error('获取声纹列表接口异常：', error)
-    return { data: [] }
+  // 声纹重命名
+  rename: (voiceprintId, newName) => {
+    return api.post('/voiceprint/rename', { id: voiceprintId, new_name: newName });
+  },
+
+  // 声纹删除
+  delete: (voiceprintId) => {
+    return api.post('/voiceprint/delete', { id: voiceprintId });
+  },
+
+  // 获取声纹音频文件
+  getAudio: (voiceprintId) => {
+    return api.get(`/voiceprint/audio/${voiceprintId}`, {
+      responseType: 'blob' // 重要：设置响应类型为blob，以便前端可以播放音频
+    });
   }
-}
-
-/**
- * 声纹名称修改
- * @param {Object} data {id: 声纹ID, new_name: 新名称}
- * @returns {Promise}
- */
-export const renameVoiceprint = async (data) => {
-  return axios.post('/voiceprint/rename', data)
-}
-
-/**
- * 声纹删除
- * @param {Object} data {id: 声纹ID}
- * @returns {Promise}
- */
-export const deleteVoiceprint = async (data) => {
-  return axios.post('/voiceprint/delete', data)
-}
+};

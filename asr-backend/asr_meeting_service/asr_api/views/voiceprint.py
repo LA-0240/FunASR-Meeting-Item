@@ -250,3 +250,55 @@ class VoiceprintDeleteView(APIView):
                 {"status": "failed", "detail": f"删除声纹失败：{str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+# ------------------- 声纹文件获取 -------------------
+@method_decorator(csrf_exempt, name='dispatch')
+class VoiceprintAudioView(APIView):
+    """获取声纹音频文件（用于前端播放）"""
+    @method_decorator(require_auth)  # 添加认证装饰器
+    def get(self, request, vp_id):
+        try:
+            # 1. 检查声纹是否存在（针对当前用户）
+            try:
+                voiceprint = Voiceprint.objects.get(id=vp_id, user=request.user)
+            except Voiceprint.DoesNotExist:
+                return Response(
+                    {"status": "failed", "detail": f"未找到ID为{vp_id}的声纹"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # 2. 检查文件是否存在
+            if not voiceprint.file_path or not os.path.exists(voiceprint.file_path):
+                return Response(
+                    {"status": "failed", "detail": "声纹文件不存在"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # 3. 读取文件内容并返回
+            from django.http import FileResponse
+            import mimetypes
+            
+            # 确定文件的MIME类型
+            mime_type, _ = mimetypes.guess_type(voiceprint.file_path)
+            if not mime_type:
+                mime_type = 'audio/wav'  # 默认MIME类型
+            
+            # 直接使用文件路径创建FileResponse
+            try:
+                response = FileResponse(open(voiceprint.file_path, 'rb'), content_type=mime_type)
+                # 设置文件名
+                filename = os.path.basename(voiceprint.file_path)
+                response['Content-Disposition'] = f'inline; filename="{filename}"'
+                return response
+            except Exception as e:
+                return Response(
+                    {"status": "failed", "detail": f"文件读取失败：{str(e)}"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
+        except Exception as e:
+            traceback.print_exc()
+            return Response(
+                {"status": "failed", "detail": f"获取声纹文件失败：{str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

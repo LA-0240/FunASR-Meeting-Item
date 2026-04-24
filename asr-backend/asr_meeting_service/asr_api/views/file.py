@@ -166,10 +166,11 @@ class FileListView(APIView):
 class FileRenameView(APIView):
     @method_decorator(require_auth)
     def post(self, request):
-        """文件重命名"""
+        """文件重命名，支持修改会议类型"""
         try:
             file_id = request.data.get("file_id")
             new_name = request.data.get("new_name", "").strip()
+            meeting_type = request.data.get("meeting_type", None)
             
             if not file_id or not new_name:
                 return Response(
@@ -188,13 +189,19 @@ class FileRenameView(APIView):
             
             # 更新文件名
             file.original_name = new_name
+            
+            # 如果提供了会议类型参数，则更新
+            if meeting_type is not None:
+                file.meeting_type = meeting_type.strip()
+            
             file.save()
             
             return Response({
                 "status": "success",
                 "detail": "文件重命名成功",
                 "file_id": file.id,
-                "new_name": file.original_name
+                "new_name": file.original_name,
+                "meeting_type": file.meeting_type
             }, status=HTTP_200_OK)
         
         except Exception as e:
@@ -203,6 +210,154 @@ class FileRenameView(APIView):
                 {"status": "failed", "detail": f"文件重命名失败：{str(e)}"},
                 status=HTTP_400_BAD_REQUEST
             )
+
+# ------------------- 文件下载接口 -------------------
+@method_decorator(csrf_exempt, name='dispatch')
+class FileDownloadView(APIView):
+    def get(self, request, file_id):
+        """下载文件，支持HTTP Range请求，播放器直接访问时不需要认证"""
+        try:
+            # 查找文件，不限制用户（播放器无法携带token）
+            try:
+                file = UploadedFile.objects.get(id=file_id)
+            except UploadedFile.DoesNotExist:
+                return Response(
+                    {"status": "failed", "detail": "文件不存在"},
+                    status=HTTP_404_NOT_FOUND
+                )
+            
+            # 检查文件是否存在
+            if not os.path.exists(file.file_path):
+                return Response(
+                    {"status": "failed", "detail": "文件已被删除"},
+                    status=HTTP_404_NOT_FOUND
+                )
+            
+            # 获取文件信息
+            path = file.file_path
+            size = os.path.getsize(path)
+            content_type = self.get_content_type(file.original_name)
+            
+            # 处理 Range 请求
+            range_header = request.META.get('HTTP_RANGE', None)
+            if range_header:
+                return self.handle_range_request(path, size, content_type, file.original_name, range_header)
+            else:
+                # 没有 Range 请求，返回完整文件
+                response = FileResponse(open(path, 'rb'))
+                response['Content-Type'] = content_type
+                response['Content-Length'] = str(size)
+                response['Accept-Ranges'] = 'bytes'
+                response['Content-Disposition'] = f'inline; filename="{file.original_name}"'
+                return response
+        
+        except Exception as e:
+            traceback.print_exc()
+            return Response(
+                {"status": "failed", "detail": f"文件下载失败：{str(e)}"},
+                status=HTTP_400_BAD_REQUEST
+            )
+    
+    def handle_range_request(self, path, file_size, content_type, filename, range_header):
+        """处理 Range 请求"""
+        from django.http import StreamingHttpResponse
+        
+        # 解析 Range 头
+        byte_start, byte_end = self.parse_range(range_header, file_size)
+        
+        # 创建文件流式响应
+        def file_stream():
+            with open(path, 'rb') as f:
+                f.seek(byte_start)
+                remaining = byte_end - byte_start + 1
+                while remaining > 0:
+                    chunk = f.read(min(8192, remaining))
+                    if not chunk:
+                        break
+                    remaining -= len(chunk)
+                    yield chunk
+        
+        # 创建响应
+        response = StreamingHttpResponse(file_stream(), status=206)
+        response['Content-Type'] = content_type
+        response['Content-Length'] = str(byte_end - byte_start + 1)
+        response['Content-Range'] = f'bytes {byte_start}-{byte_end}/{file_size}'
+        response['Accept-Ranges'] = 'bytes'
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
+        return response
+    
+    def parse_range(self, range_header, file_size):
+        """解析 Range 头"""
+        # 默认范围
+        start = 0
+        end = file_size - 1
+        
+        try:
+            # 解析: bytes=start-end
+            if not range_header.startswith('bytes='):
+                return start, end
+            
+            range_value = range_header[6:]  # 去掉 'bytes='
+            if '-' not in range_value:
+                return start, end
+            
+            range_parts = range_value.split('-', 1)
+            
+            # 处理 start-
+            if range_parts[0]:
+                start = int(range_parts[0])
+            
+            # 处理 -end
+            if len(range_parts) > 1 and range_parts[1]:
+                end = int(range_parts[1])
+            
+            # 确保范围有效
+            start = max(0, start)
+            end = min(file_size - 1, end)
+            
+            if start > end:
+                start = 0
+                end = file_size - 1
+        
+        except (ValueError, IndexError):
+            start = 0
+            end = file_size - 1
+        
+        return start, end
+    
+    def get_content_type(self, filename):
+        """根据文件名获取 Content-Type"""
+        ext = filename.lower().split('.')[-1]
+        
+        # 音频类型
+        audio_types = {
+            'mp3': 'audio/mpeg',
+            'wav': 'audio/wav',
+            'ogg': 'audio/ogg',
+            'flac': 'audio/flac',
+            'm4a': 'audio/mp4',
+            'aac': 'audio/aac',
+            'wma': 'audio/x-ms-wma'
+        }
+        
+        # 视频类型
+        video_types = {
+            'mp4': 'video/mp4',
+            'webm': 'video/webm',
+            'ogg': 'video/ogg',
+            'avi': 'video/x-msvideo',
+            'mov': 'video/quicktime',
+            'mkv': 'video/x-matroska',
+            'flv': 'video/x-flv',
+            'wmv': 'video/x-ms-wmv'
+        }
+        
+        if ext in audio_types:
+            return audio_types[ext]
+        elif ext in video_types:
+            return video_types[ext]
+        else:
+            return 'application/octet-stream'
 
 # ------------------- 文件删除接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
