@@ -4,7 +4,7 @@ from django.utils.decorators import method_decorator
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.status import HTTP_200_OK, HTTP_400_BAD_REQUEST, HTTP_404_NOT_FOUND
-from ..models import UploadedFile, Transcription
+from ..models import UploadedFile, Transcription, Voiceprint
 from ..auth_utils import require_auth
 from .asr import ASRTranscribeView
 from .video import VideoASRTranscribeView
@@ -128,13 +128,50 @@ class TranscriptionGetView(APIView):
                     status=HTTP_404_NOT_FOUND
                 )
             
-            # 3. 准备返回数据
+            # 3. 为 speaker_info 添加头像信息（根据声纹表匹配）
+            speaker_info = transcription.speaker_info or []
+            # 为 raw_sentence_info 添加头像信息
+            raw_sentence_info = transcription.raw_sentence_info or []
+            # 获取当前用户的所有声纹
+            voiceprints = {vp.name: vp for vp in Voiceprint.objects.filter(user=request.user)}
+            
+            # 为每条记录添加 avatar_url
+            speaker_info_with_avatar = []
+            for item in speaker_info:
+                speaker = item.get('speaker', '')
+                # 尝试匹配声纹头像
+                avatar_url = None
+                if speaker in voiceprints:
+                    vp = voiceprints[speaker]
+                    if vp.avatar:
+                        avatar_url = f"/media/{vp.avatar.name}"
+                speaker_info_with_avatar.append({
+                    **item,
+                    'avatar_url': avatar_url
+                })
+            
+            # 为原始句子数据添加头像信息
+            raw_sentence_info_with_avatar = []
+            for item in raw_sentence_info:
+                speaker = item.get('speaker', '')
+                avatar_url = None
+                if speaker in voiceprints:
+                    vp = voiceprints[speaker]
+                    if vp.avatar:
+                        avatar_url = f"/media/{vp.avatar.name}"
+                raw_sentence_info_with_avatar.append({
+                    **item,
+                    'avatar_url': avatar_url
+                })
+            
+            # 4. 准备返回数据
             return Response({
                 "status": "success",
                 "file_id": file_id,
                 "file_name": file.original_name,
                 "transcription_text": transcription.transcription_text,
-                "speaker_info": transcription.speaker_info,
+                "speaker_info": speaker_info_with_avatar,
+                "raw_sentence_info": raw_sentence_info_with_avatar,  # 原始句子数据
                 "created_at": transcription.created_at.isoformat(),
                 "updated_at": transcription.updated_at.isoformat()
             }, status=HTTP_200_OK)
@@ -403,8 +440,9 @@ class TranscriptionGenerateView(APIView):
             # 8. 提取转录结果
             transcription_data = asr_response.data
             transcription_list = transcription_data.get('transcription', [])
+            original_sentence_info = transcription_data.get('sentence_info', [])  # 原始句子数据
             
-            # 9. 格式化转录数据
+            # 9. 格式化转录数据（已匹配声纹）
             speaker_info = []
             for item in transcription_list:
                 speaker_info.append({
@@ -415,22 +453,36 @@ class TranscriptionGenerateView(APIView):
                     'original_spk': item.get('original_spk', '')
                 })
             
-            # 10. 生成转录文本
+            # 10. 格式化原始句子数据
+            raw_sentence_info = []
+            if original_sentence_info:
+                for item in original_sentence_info:
+                    raw_sentence_info.append({
+                        'speaker': item.get('spk') or item.get('sp', '未知说话人'),
+                        'text': item.get('text', ''),
+                        'start_time': round(item.get('start', 0) / 1000, 2),
+                        'end_time': round(item.get('end', 0) / 1000, 2),
+                        'original_spk': item.get('spk') or item.get('sp', 0)
+                    })
+            
+            # 11. 生成转录文本
             transcription_text = '\n'.join([f"{item.get('spk', '未知说话人')}: {item.get('text', '')}" for item in transcription_list])
             
-            # 11. 保存或更新逐字稿
+            # 12. 保存或更新逐字稿
             try:
                 # 如果已存在，更新
                 transcription = Transcription.objects.get(file=file)
                 transcription.transcription_text = transcription_text
                 transcription.speaker_info = speaker_info
+                transcription.raw_sentence_info = raw_sentence_info if raw_sentence_info else speaker_info
                 transcription.save()
             except Transcription.DoesNotExist:
                 # 如果不存在，创建新的
                 transcription = Transcription(
                     file=file,
                     transcription_text=transcription_text,
-                    speaker_info=speaker_info
+                    speaker_info=speaker_info,
+                    raw_sentence_info=raw_sentence_info if raw_sentence_info else speaker_info
                 )
                 transcription.save()
             

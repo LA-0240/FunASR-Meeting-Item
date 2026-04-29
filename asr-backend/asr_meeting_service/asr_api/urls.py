@@ -25,11 +25,15 @@ from .views import (
     VoiceprintRenameView,
     VoiceprintDeleteView,
     VoiceprintAudioView,
+    VoiceprintAvatarUploadView,
+    VoiceprintAvatarDeleteView,
     # 用户管理接口
     UserRegisterView,
     UserLoginView,
     UserLogoutView,
     UserProfileView,
+    UserAvatarUploadView,
+    UserAvatarDeleteView,
     # 文件管理接口
     FileUploadView,
     FileListView,
@@ -51,6 +55,11 @@ from .views import (
     PromptCopyView,
     # 会议分析接口
     MeetingAnalysisView,
+    # RAG接口（新增）
+    ChatView,
+    IndexFileView,
+    IndexStatusView,
+    TestRetrieveView,
 )
 
 urlpatterns = [
@@ -84,12 +93,16 @@ urlpatterns = [
     path('voiceprint/rename', VoiceprintRenameView.as_view(), name='voiceprint-rename'), # 声纹重命名
     path('voiceprint/delete', VoiceprintDeleteView.as_view(), name='voiceprint-delete'), # 声纹删除
     path('voiceprint/audio/<int:vp_id>', VoiceprintAudioView.as_view(), name='voiceprint-audio'), # 声纹音频文件获取
+    path('voiceprint/avatar/upload/<int:vp_id>', VoiceprintAvatarUploadView.as_view(), name='voiceprint-avatar-upload'), # 声纹头像上传
+    path('voiceprint/avatar/delete/<int:vp_id>', VoiceprintAvatarDeleteView.as_view(), name='voiceprint-avatar-delete'), # 声纹头像删除
 
     # 用户接口
     path('user/register', UserRegisterView.as_view(), name='user-register'), # 用户注册
     path('user/login', UserLoginView.as_view(), name='user-login'), # 用户登录
     path('user/logout', UserLogoutView.as_view(), name='user-logout'), # 用户退出登录
     path('user/profile', UserProfileView.as_view(), name='user-profile'),   # 用户信息
+    path('user/avatar/upload', UserAvatarUploadView.as_view(), name='user-avatar-upload'), # 头像上传
+    path('user/avatar/delete', UserAvatarDeleteView.as_view(), name='user-avatar-delete'), # 头像删除
     
     # 文件接口
     path('file/upload', FileUploadView.as_view(), name='file-upload'), # 文件上传
@@ -113,4 +126,10 @@ urlpatterns = [
     path('prompt/update/<int:prompt_id>', PromptUpdateView.as_view(), name='prompt-update'), # 更新模板
     path('prompt/delete/<int:prompt_id>', PromptDeleteView.as_view(), name='prompt-delete'), # 删除模板
     path('prompt/copy/<int:prompt_id>', PromptCopyView.as_view(), name='prompt-copy'), # 获取模板内容（用于前端复制到编辑窗口）
+    
+    # RAG接口（新增）
+    path('rag/chat', ChatView.as_view(), name='rag-chat'),  # 聊天接口
+    path('rag/index', IndexFileView.as_view(), name='rag-index'),  # 索引文件
+    path('rag/status', IndexStatusView.as_view(), name='rag-status'),  # 索引状态
+    path('rag/test', TestRetrieveView.as_view(), name='rag-test'),  # 测试检索
 ]

@@ -46,7 +46,10 @@
             @click="handleTogglePlay(item)"
           >
             <div class="item-preview">
-              <span class="preview-icon">👤</span>
+              <div class="avatar-container">
+                <img v-if="item.avatar_url" :src="API_BASE_URL + item.avatar_url" class="voiceprint-avatar" alt="声纹头像" @click.stop="showAvatarModal(item)" />
+                <div v-else class="avatar-default" @click.stop="showAvatarModal(item)">👤</div>
+              </div>
               <div v-if="playingId === item.id" class="sound-waves" :class="{ paused: isPaused }">
                 <div class="wave"></div>
                 <div class="wave"></div>
@@ -63,6 +66,7 @@
             </div>
             <div class="item-actions" @click.stop>
               <button @click="handleRename(item)">重命名</button>
+              <button @click="showAvatarModal(item)">头像</button>
               <button class="delete" @click="handleDelete(item.id)">删除</button>
             </div>
           </div>
@@ -81,8 +85,13 @@
             <tbody>
               <tr v-for="item in filteredVoiceprints" :key="item.id">
                 <td>
-                  <span class="icon">👤</span>
-                  {{ item.name }}
+                  <div class="voiceprint-name-cell">
+                    <div class="avatar-small-container">
+                      <img v-if="item.avatar_url" :src="API_BASE_URL + item.avatar_url" class="voiceprint-avatar-small" alt="声纹头像" @click.stop="showAvatarModal(item)" />
+                      <div v-else class="avatar-small-default" @click.stop="showAvatarModal(item)">👤</div>
+                    </div>
+                    <span class="name-text">{{ item.name }}</span>
+                  </div>
                 </td>
                 <td>
                   <div class="play-control" @click="handleTogglePlay(item)">
@@ -170,12 +179,59 @@
         </div>
       </div>
     </div>
+
+    <!-- 头像管理模态框 -->
+    <div v-if="showAvatarModalVisible" class="modal-overlay" @click.self="showAvatarModalVisible = false">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>声纹头像管理 - {{ currentVoiceprint?.name }}</h3>
+          <button class="close-btn" @click="showAvatarModalVisible = false">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="avatar-preview-area">
+              <!-- 预览顺序：新选图片 > 已有头像 > 默认 emoji -->
+              <img v-if="avatarPreviewUrl" :src="avatarPreviewUrl" class="avatar-large-preview" alt="头像预览" />
+              <img v-else-if="currentVoiceprint?.avatar_url" :src="API_BASE_URL + currentVoiceprint.avatar_url" class="avatar-large-preview" alt="声纹头像" />
+              <div v-else class="avatar-large-default">👤</div>
+            </div>
+          <div class="avatar-actions">
+            <div class="file-upload-area">
+              <input
+                type="file"
+                ref="avatarFileInput"
+                @change="handleAvatarFileSelect"
+                accept="image/*"
+                style="display: none;"
+              />
+              <button class="upload-avatar-btn" @click="$refs.avatarFileInput.click()">
+                <span class="icon">📁</span>
+                <span>选择图片</span>
+              </button>
+              <div class="file-info" v-if="selectedAvatarFile">
+                <span class="icon">✅</span>
+                <span>{{ selectedAvatarFile.name }}</span>
+              </div>
+            </div>
+            <div class="avatar-action-buttons">
+              <button class="confirm-btn" @click="handleUploadAvatar" :disabled="avatarLoading">
+                {{ avatarLoading ? '上传中...' : '更换头像' }}
+              </button>
+              <button class="delete-avatar-btn" @click="handleDeleteAvatar" :disabled="!currentVoiceprint?.avatar_url">
+                删除头像
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
 import { ref, onMounted, watch, onUnmounted, computed } from 'vue';
 import { voiceprintApi } from '../api/voiceprintApi';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 export default {
   name: 'VoiceprintView',
@@ -198,6 +254,12 @@ export default {
     const audioElement = ref(null);
     const timeUpdateInterval = ref(null);
     const isLoading = ref(false);
+    const showAvatarModalVisible = ref(false);
+    const currentVoiceprint = ref(null);
+    const selectedAvatarFile = ref(null);
+    const avatarFileInput = ref(null);
+    const avatarLoading = ref(false);
+    const avatarPreviewUrl = ref(null); // 新增：图片预览 URL
 
     // 根据关键词筛选声纹
     const filteredVoiceprints = computed(() => {
@@ -410,6 +472,78 @@ export default {
       isLoading.value = false; // 清除加载状态
     };
 
+    // 头像相关方法
+    const showAvatarModal = (item) => {
+      currentVoiceprint.value = item;
+      selectedAvatarFile.value = null;
+      avatarPreviewUrl.value = null;
+      showAvatarModalVisible.value = true;
+    };
+
+    const handleAvatarFileSelect = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        // 校验图片格式
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if (!allowedTypes.includes(file.type)) {
+          alert('仅支持 JPG、PNG、GIF、WebP 格式的图片');
+          return;
+        }
+        // 校验文件大小（5MB）
+        if (file.size > 5 * 1024 * 1024) {
+          alert('图片大小不能超过5MB');
+          return;
+        }
+        selectedAvatarFile.value = file;
+        // 创建预览 URL
+        avatarPreviewUrl.value = URL.createObjectURL(file);
+      }
+    };
+
+    const handleUploadAvatar = async () => {
+      if (!currentVoiceprint.value) return;
+      if (!selectedAvatarFile.value) {
+        alert('请选择图片文件');
+        return;
+      }
+      avatarLoading.value = true;
+      try {
+        const res = await voiceprintApi.uploadAvatar(currentVoiceprint.value.id, selectedAvatarFile.value);
+        // 更新 currentVoiceprint 的头像 URL
+        currentVoiceprint.value.avatar_url = res.avatar_url || res.data?.avatar_url;
+        await loadVoiceprints();
+        selectedAvatarFile.value = null;
+        avatarPreviewUrl.value = null; // 清除预览
+        if (avatarFileInput.value) {
+          avatarFileInput.value.value = '';
+        }
+        showAvatarModalVisible.value = false;
+      } catch (error) {
+        console.error('头像上传失败:', error);
+        alert('头像上传失败');
+      } finally {
+        avatarLoading.value = false;
+      }
+    };
+
+    const handleDeleteAvatar = async () => {
+      if (!currentVoiceprint.value) return;
+      if (!confirm('确定要删除这个声纹的头像吗？')) {
+        return;
+      }
+      try {
+        await voiceprintApi.deleteAvatar(currentVoiceprint.value.id);
+        // 清除 currentVoiceprint 的头像 URL
+        currentVoiceprint.value.avatar_url = null;
+        await loadVoiceprints();
+        avatarPreviewUrl.value = null;
+        showAvatarModalVisible.value = false;
+      } catch (error) {
+        console.error('头像删除失败:', error);
+        alert('头像删除失败');
+      }
+    };
+
     const formatDate = (dateStr) => {
       if (!dateStr) return '';
       const date = new Date(dateStr);
@@ -458,6 +592,12 @@ export default {
       isPaused,
       currentTime,
       isLoading,
+      showAvatarModalVisible,
+      currentVoiceprint,
+      selectedAvatarFile,
+      avatarFileInput,
+      avatarLoading,
+      avatarPreviewUrl,
       loadVoiceprints,
       handleFileSelect,
       handleAddVoiceprint,
@@ -468,7 +608,12 @@ export default {
       handleSearch,
       handleClickOutside,
       formatDate,
-      formatTime
+      formatTime,
+      showAvatarModal,
+      handleAvatarFileSelect,
+      handleUploadAvatar,
+      handleDeleteAvatar,
+      API_BASE_URL
     };
   }
 };
@@ -647,6 +792,93 @@ export default {
 .preview-icon {
   font-size: 64px;
   z-index: 1;
+}
+
+/* 头像样式 */
+.avatar-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.voiceprint-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #eee;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.voiceprint-avatar:hover {
+  transform: scale(1.1);
+}
+
+.avatar-default {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #f5f7fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  border: 2px solid #ddd;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.avatar-default:hover {
+  transform: scale(1.1);
+}
+
+/* 列表视图头像 */
+.voiceprint-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar-small-container {
+  flex-shrink: 0;
+}
+
+.voiceprint-avatar-small {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid #eee;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.voiceprint-avatar-small:hover {
+  transform: scale(1.1);
+}
+
+.avatar-small-default {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #f5f7fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  border: 1px solid #ddd;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.avatar-small-default:hover {
+  transform: scale(1.1);
+}
+
+.name-text {
+  font-weight: 500;
 }
 
 .sound-waves {
@@ -1020,5 +1252,98 @@ export default {
 
 .confirm-btn:hover {
   background: #66b1ff;
+}
+
+/* 头像管理模态框样式 */
+.avatar-preview-area {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.avatar-large-preview {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #eee;
+}
+
+.avatar-large-default {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: #f5f7fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 60px;
+  border: 3px solid #ddd;
+}
+
+.avatar-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.file-upload-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.upload-avatar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: #f5f7fa;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.upload-avatar-btn:hover {
+  background: #e8f4ff;
+  border-color: #409eff;
+  color: #409eff;
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #409eff;
+  font-size: 14px;
+}
+
+.avatar-action-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.delete-avatar-btn {
+  padding: 10px 24px;
+  border: 1px solid #f56c6c;
+  background: white;
+  color: #f56c6c;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.delete-avatar-btn:hover:not(:disabled) {
+  background: #fef0f0;
+}
+
+.delete-avatar-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>

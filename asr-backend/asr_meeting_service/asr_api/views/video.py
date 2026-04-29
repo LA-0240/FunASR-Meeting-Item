@@ -163,7 +163,8 @@ class VideoASRTranscribeView(APIView):
                     user = request.user if request.user.is_authenticated else None
                     print(f"视频处理用户认证状态: {request.user.is_authenticated}")
                     print(f"视频处理用户: {request.user.username if request.user.is_authenticated else '匿名'}")
-                    name = match_voiceprint(feat, user=user)  # 传入当前用户（如果已登录）
+                    # 传入会议中的说话人数量用于动态阈值
+                    name = match_voiceprint(feat, user=user, speaker_count=len(speaker_segments))
                     print(f"视频处理声纹匹配结果: {name}")
                     speaker_name_map[spk_id] = name if name else f"spk-{spk_id}"
                 else:
@@ -195,10 +196,13 @@ class VideoASRTranscribeView(APIView):
                 "status": "success",
                 "filename": file.name,
                 "transcription": formatted_result,
+                "sentence_info": sentence_info,  # 新增：返回原始句子数据
                 "speaker_stats": {
                     "total_speakers": len(speaker_ids),
                     "speaker_ids": sorted(list(speaker_ids)),
-                    "matched_speakers": matched_speakers
+                    "matched_speakers": matched_speakers,
+                    "total_sentences": len(sentence_info),  # 新增：原始句子总数
+                    "merged_sentences": len(formatted_result)  # 新增：合并后句子数
                 },
                 "note": "视频已处理：分离+声纹识别完成",
                 "timestamp": datetime.now().isoformat()

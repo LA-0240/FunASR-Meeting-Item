@@ -5,12 +5,13 @@ from .video import VideoASRTranscribeView
 from .meeting import MeetingSummaryView, MeetingAbstractView, MeetingSummaryUpdateView, MeetingAbstractUpdateView, GetMeetingSummaryView, GetMeetingAbstractView, GenerateSegmentsView, SegmentsListView, SegmentUpdateView
 from .meeting_analysis import MeetingAnalysisView
 from .export import ExportTranscriptionWordView, ExportSummaryWordView, ExportAbstractWordView
-from .voiceprint import VoiceprintAddView, VoiceprintListView, VoiceprintRenameView, VoiceprintDeleteView, VoiceprintAudioView
-from .user import UserRegisterView, UserLoginView, UserLogoutView, UserProfileView
+from .voiceprint import VoiceprintAddView, VoiceprintListView, VoiceprintRenameView, VoiceprintDeleteView, VoiceprintAudioView, VoiceprintAvatarUploadView, VoiceprintAvatarDeleteView
+from .user import UserRegisterView, UserLoginView, UserLogoutView, UserProfileView, UserAvatarUploadView, UserAvatarDeleteView
 from .file import FileUploadView, FileListView, FileRenameView, FileDeleteView, FileDownloadView
 from .transcription import TranscriptionSearchView, TranscriptionGetView, TranscriptionEditView, TranscriptionGenerateView
 from .upload_transcribe import FileUploadTranscribeView
 from .prompt import PromptListView, PromptAddView, PromptUpdateView, PromptDeleteView, PromptCopyView
+from .rag import ChatView, IndexFileView, IndexStatusView, TestRetrieveView
 
 __all__ = [
     # 基础
@@ -39,11 +40,15 @@ __all__ = [
     'VoiceprintRenameView',
     'VoiceprintDeleteView',
     'VoiceprintAudioView',
+    'VoiceprintAvatarUploadView',
+    'VoiceprintAvatarDeleteView',
     # 用户管理-user
     'UserRegisterView',
     'UserLoginView',
     'UserLogoutView',
     'UserProfileView',
+    'UserAvatarUploadView',
+    'UserAvatarDeleteView',
     # 文件管理-file
     'FileUploadView',
     'FileListView',
@@ -65,4 +70,9 @@ __all__ = [
     'PromptCopyView',
     # 会议分析-meeting_analysis
     'MeetingAnalysisView',
+    # RAG（新增）
+    'ChatView',
+    'IndexFileView',
+    'IndexStatusView',
+    'TestRetrieveView',
 ]

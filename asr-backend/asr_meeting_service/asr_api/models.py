@@ -60,6 +60,7 @@ def ready():
 class User(AbstractUser):
     """用户模型"""
     email = models.EmailField(unique=True, verbose_name="邮箱")
+    avatar = models.ImageField(upload_to='avatars/', blank=True, null=True, verbose_name="头像")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
 
@@ -85,6 +86,7 @@ class AudioRecord(models.Model):
 class Voiceprint(models.Model):
     name = models.CharField(max_length=100, verbose_name="声纹名称")
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="所属用户")  # 新增外键关联
+    avatar = models.ImageField(upload_to='voiceprint_avatars/', blank=True, null=True, verbose_name="声纹头像")
     feature = models.BinaryField(verbose_name="声纹特征（二进制存储）")
     file_path = models.CharField(max_length=500, blank=True, null=True, verbose_name="声纹文件路径")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
@@ -138,7 +140,8 @@ class Transcription(models.Model):
     """转录模型"""
     file = models.OneToOneField(UploadedFile, on_delete=models.CASCADE, verbose_name="关联文件")
     transcription_text = models.TextField(verbose_name="转录文本")
-    speaker_info = models.JSONField(blank=True, null=True, verbose_name="说话人信息")
+    speaker_info = models.JSONField(blank=True, null=True, verbose_name="说话人信息（已合并优化）")
+    raw_sentence_info = models.JSONField(blank=True, null=True, verbose_name="原始句子数据（未合并）")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
 

@@ -1,8 +1,11 @@
 import axios from 'axios';
 
+// API 基础 URL
+export const API_BASE_URL = 'http://localhost:8000';
+
 // 创建axios实例
 const api = axios.create({
-  baseURL: 'http://localhost:8000', // 后端API地址
+  baseURL: API_BASE_URL, // 后端API地址
   timeout: 300000, // 请求超时时间 (5分钟)
   headers: {
     'Content-Type': 'application/json'

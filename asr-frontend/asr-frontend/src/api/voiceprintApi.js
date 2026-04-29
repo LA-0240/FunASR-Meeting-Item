@@ -34,5 +34,21 @@ export const voiceprintApi = {
     return api.get(`/voiceprint/audio/${voiceprintId}`, {
       responseType: 'blob' // 重要：设置响应类型为blob，以便前端可以播放音频
     });
+  },
+
+  // 声纹头像上传
+  uploadAvatar: (voiceprintId, file) => {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    return api.post(`/voiceprint/avatar/upload/${voiceprintId}`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+  },
+
+  // 声纹头像删除
+  deleteAvatar: (voiceprintId) => {
+    return api.post(`/voiceprint/avatar/delete/${voiceprintId}`);
   }
 };

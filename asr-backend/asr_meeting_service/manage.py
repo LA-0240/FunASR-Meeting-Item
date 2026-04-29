@@ -2,7 +2,25 @@
 """Django's command-line utility for administrative tasks."""
 import os
 import sys
+from pathlib import Path
 
+# ========== 在任何导入前设置环境变量！（最重要的一步！）==========
+BASE_DIR = Path(__file__).resolve().parent
+HF_CACHE_DIR = os.path.join(BASE_DIR, "hf_cache")
+
+# 强制离线模式 - 阻止所有网络请求！
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["HF_DATASETS_OFFLINE"] = "1"
+
+# 设置缓存目录
+os.environ["HF_HOME"] = HF_CACHE_DIR
+os.environ["HF_HUB_CACHE"] = HF_CACHE_DIR
+os.environ["TRANSFORMERS_CACHE"] = HF_CACHE_DIR
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+
+# 设置镜像源（以防万一需要下载）
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
 def main():
     """Run administrative tasks."""

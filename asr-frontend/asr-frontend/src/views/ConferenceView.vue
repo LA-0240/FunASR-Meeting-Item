@@ -48,8 +48,8 @@
             <div v-if="viewMode === 'grid'" class="grid-view">
               <div v-for="file in videoFiles" :key="file.id" class="grid-item" @click="handleFileClick(file)">
                 <div class="item-preview" :class="getFileIcon(file.file_type)">
-                  <span class="preview-icon">{{ getPreviewIcon(file.file_type) }}</span>
                   <img v-if="file.thumbnail" :src="file.thumbnail" alt="" />
+                  <span class="preview-icon" v-else>{{ getPreviewIcon(file.file_type) }}</span>
                   <!-- 菜单按钮 -->
                   <div class="menu-container" @click.stop>
                     <button class="menu-btn" @click="toggleMenu(file.id)">
@@ -118,8 +118,8 @@
             <div v-if="viewMode === 'grid'" class="grid-view">
               <div v-for="file in audioFiles" :key="file.id" class="grid-item" @click="handleFileClick(file)">
                 <div class="item-preview" :class="getFileIcon(file.file_type)">
-                  <span class="preview-icon">{{ getPreviewIcon(file.file_type) }}</span>
                   <img v-if="file.thumbnail" :src="file.thumbnail" alt="" />
+                  <span class="preview-icon" v-else>{{ getPreviewIcon(file.file_type) }}</span>
                   <!-- 菜单按钮 -->
                   <div class="menu-container" @click.stop>
                     <button class="menu-btn" @click="toggleMenu(file.id)">
@@ -188,8 +188,8 @@
           <div v-if="viewMode === 'grid'" class="grid-view">
             <div v-for="file in filteredFiles" :key="file.id" class="grid-item" @click="handleFileClick(file)">
               <div class="item-preview" :class="getFileIcon(file.file_type)">
-                <span class="preview-icon">{{ getPreviewIcon(file.file_type) }}</span>
                 <img v-if="file.thumbnail" :src="file.thumbnail" alt="" />
+                <span class="preview-icon" v-else>{{ getPreviewIcon(file.file_type) }}</span>
                 <!-- 菜单按钮 -->
                 <div class="menu-container" @click.stop>
                   <button class="menu-btn" @click="toggleMenu(file.id)">
@@ -318,7 +318,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { fileApi } from '../api/fileApi';
 
@@ -341,6 +341,48 @@ export default {
     const uploading = ref(false);
     const selectedFiles = ref([]);
 
+    // 生成视频缩略图
+    const generateVideoThumbnail = (file) => {
+      return new Promise((resolve, reject) => {
+        // 只处理视频文件
+        const fileType = file.file_type;
+        if (!fileType?.includes('video') && !['mp4', 'avi', 'mov', 'mkv'].includes(fileType)) {
+          resolve(null);
+          return;
+        }
+
+        const video = document.createElement('video');
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const videoUrl = fileApi.getDownloadUrl(file.id);
+
+        video.src = videoUrl;
+        video.crossOrigin = 'anonymous';
+        video.currentTime = 1; // 取第1秒的画面
+
+        video.onloadeddata = () => {
+          // 设置画布大小与视频相同
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          
+          // 绘制视频帧到画布
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          
+          // 转换为 base64
+          const thumbnailUrl = canvas.toDataURL('image/jpeg', 0.7);
+          resolve(thumbnailUrl);
+          
+          // 清理资源
+          video.src = '';
+        };
+
+        video.onerror = () => {
+          console.error('生成缩略图失败:', file.name);
+          resolve(null);
+        };
+      });
+    };
+
     const loadFiles = async (params = {}) => {
       loading.value = true;
       try {
@@ -360,13 +402,41 @@ export default {
         }
         
         // 映射字段名（后端用 original_name/file_size/upload_time，前端用 name/size/created_at）
-        files.value = fileList.map(file => ({
+        const mappedFiles = fileList.map(file => ({
           ...file,
           id: file.file_id || file.id,
           name: file.original_name || file.name,
           size: file.file_size || file.size,
           created_at: file.upload_time || file.created_at
         }));
+        
+        files.value = mappedFiles;
+        
+        // 异步为视频文件生成缩略图（不阻塞页面加载）
+        nextTick(async () => {
+          const videoFilesOnly = mappedFiles.filter(file => {
+            const fileType = file.file_type;
+            return fileType?.includes('video') || ['mp4', 'avi', 'mov', 'mkv'].includes(fileType);
+          });
+          
+          // 并发处理缩略图生成
+          const thumbnailPromises = videoFilesOnly.map(async (file) => {
+            try {
+              const thumbnail = await generateVideoThumbnail(file);
+              if (thumbnail) {
+                // 更新files数组中的对应文件
+                const fileIndex = files.value.findIndex(f => f.id === file.id);
+                if (fileIndex !== -1) {
+                  files.value[fileIndex].thumbnail = thumbnail;
+                }
+              }
+            } catch (e) {
+              console.error('生成缩略图出错:', e);
+            }
+          });
+          
+          await Promise.all(thumbnailPromises);
+        });
       } catch (error) {
         console.error('加载文件列表失败:', error);
       } finally {
@@ -861,13 +931,18 @@ export default {
   align-items: center;
   justify-content: center;
   position: relative;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .item-preview img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
+}
+
+.item-preview img + .preview-icon {
+  display: none;
 }
 
 .preview-icon {

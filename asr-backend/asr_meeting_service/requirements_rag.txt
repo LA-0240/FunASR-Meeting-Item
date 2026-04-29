@@ -1,0 +1,32 @@
+# ==========================================
+# FunASR智能会议纪要系统 - RAG/Agent依赖
+# 步骤1.2：安装依赖库
+# ==========================================
+
+# LangChain核心框架
+langchain>=0.3.0
+langchain-core>=0.3.0
+langchain-chroma>=0.1.0
+langchain-huggingface>=0.1.0
+
+# 向量数据库
+chromadb>=0.5.0
+
+# Embedding模型（BGE-M3用）
+sentence-transformers>=3.0.0
+transformers>=4.40.0
+torch>=2.0.0
+flagembedding>=1.2.0
+
+# 工具库
+numpy>=1.24.0
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+
+# ==========================================
+# 安装说明：
+# pip install -r requirements_rag.txt
+#
+# 如果网络慢，可以用国内源：
+# pip install -r requirements_rag.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+# ==========================================

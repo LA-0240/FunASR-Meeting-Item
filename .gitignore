@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+
+# Database
+*.sqlite3
+*.db
+
+# AI Model Cache
+hf_cache/
+model_cache/
+chroma_db/
+
+# Temp Files
+temp_files/
+*.tmp
+
+# Media Files
+*.mp4
+*.wav
+*.mp3
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploads
+asr-backend/asr_meeting_service/uploaded_files/
+asr-backend/asr_meeting_service/media/
+asr-backend/asr_meeting_service/voiceprints/
+
+# Logs
+*.log

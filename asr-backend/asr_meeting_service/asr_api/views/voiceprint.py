@@ -142,6 +142,7 @@ class VoiceprintListView(APIView):
                 "id": vp.id,
                 "name": vp.name,
                 "file_path": vp.file_path,
+                "avatar_url": f"/media/{vp.avatar.name}" if vp.avatar else None,
                 "created_at": vp.created_at.isoformat(),
                 "updated_at": vp.updated_at.isoformat()
             } for vp in voiceprints]
@@ -300,5 +301,133 @@ class VoiceprintAudioView(APIView):
             traceback.print_exc()
             return Response(
                 {"status": "failed", "detail": f"获取声纹文件失败：{str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+# ------------------- 声纹头像上传 -------------------
+@method_decorator(csrf_exempt, name='dispatch')
+class VoiceprintAvatarUploadView(APIView):
+    """声纹头像上传接口"""
+    @method_decorator(require_auth)
+    def post(self, request, vp_id):
+        try:
+            # 1. 检查声纹是否存在（针对当前用户）
+            try:
+                voiceprint = Voiceprint.objects.get(id=vp_id, user=request.user)
+            except Voiceprint.DoesNotExist:
+                return Response(
+                    {"status": "failed", "detail": f"未找到ID为{vp_id}的声纹"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # 2. 校验参数
+            if 'avatar' not in request.FILES:
+                return Response(
+                    {"status": "failed", "detail": "未上传图片文件"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            file = request.FILES['avatar']
+            # 3. 校验图片格式
+            allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
+            if not any(file.name.lower().endswith(ext) for ext in allowed_extensions):
+                return Response(
+                    {"status": "failed", "detail": f"仅支持图片格式：{allowed_extensions}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 4. 校验文件大小（5MB）
+            if file.size > 5 * 1024 * 1024:
+                return Response(
+                    {"status": "failed", "detail": "图片大小不能超过5MB"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 5. 删除旧头像（如果有）
+            if voiceprint.avatar:
+                try:
+                    if os.path.exists(voiceprint.avatar.path):
+                        os.remove(voiceprint.avatar.path)
+                except:
+                    pass
+            
+            # 6. 保存新头像
+            # 生成唯一的文件名
+            timestamp = time.strftime('%Y%m%d%H%M%S')
+            random_str = str(uuid.uuid4())[:8]
+            file_extension = os.path.splitext(file.name)[1]
+            new_filename = f'vp_avatar_{voiceprint.id}_{timestamp}_{random_str}{file_extension}'
+            
+            # 保存到 MEDIA_ROOT/voiceprint_avatars/
+            import shutil
+            avatar_dir = os.path.join(settings.MEDIA_ROOT, 'voiceprint_avatars')
+            if not os.path.exists(avatar_dir):
+                os.makedirs(avatar_dir)
+            
+            avatar_path = os.path.join(avatar_dir, new_filename)
+            with open(avatar_path, 'wb+') as destination:
+                for chunk in file.chunks():
+                    destination.write(chunk)
+            
+            # 7. 更新声纹头像字段
+            voiceprint.avatar.name = f'voiceprint_avatars/{new_filename}'
+            voiceprint.save()
+            
+            return Response({
+                "status": "success",
+                "detail": "头像上传成功",
+                "avatar_url": f"/media/voiceprint_avatars/{new_filename}"
+            })
+            
+        except Exception as e:
+            traceback.print_exc()
+            return Response(
+                {"status": "failed", "detail": f"头像上传失败：{str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+# ------------------- 声纹头像删除 -------------------
+@method_decorator(csrf_exempt, name='dispatch')
+class VoiceprintAvatarDeleteView(APIView):
+    """声纹头像删除接口"""
+    @method_decorator(require_auth)
+    def post(self, request, vp_id):
+        try:
+            # 1. 检查声纹是否存在（针对当前用户）
+            try:
+                voiceprint = Voiceprint.objects.get(id=vp_id, user=request.user)
+            except Voiceprint.DoesNotExist:
+                return Response(
+                    {"status": "failed", "detail": f"未找到ID为{vp_id}的声纹"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # 2. 检查是否有头像
+            if not voiceprint.avatar:
+                return Response(
+                    {"status": "failed", "detail": "该声纹没有头像"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 3. 删除头像文件
+            try:
+                if os.path.exists(voiceprint.avatar.path):
+                    os.remove(voiceprint.avatar.path)
+            except:
+                pass
+            
+            # 4. 清除数据库中的头像字段
+            voiceprint.avatar = None
+            voiceprint.save()
+            
+            return Response({
+                "status": "success",
+                "detail": "头像删除成功"
+            })
+            
+        except Exception as e:
+            traceback.print_exc()
+            return Response(
+                {"status": "failed", "detail": f"头像删除失败：{str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

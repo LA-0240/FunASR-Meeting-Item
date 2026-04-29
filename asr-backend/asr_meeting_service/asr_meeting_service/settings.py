@@ -116,8 +116,8 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # 国际化配置
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
-LANGUAGE_CODE = "en-us"
-TIME_ZONE = "UTC"
+LANGUAGE_CODE = "zh-hans"
+TIME_ZONE = "Asia/Shanghai"
 USE_I18N = True
 USE_TZ = True
 
@@ -125,6 +125,12 @@ USE_TZ = True
 # 静态文件地址（存放CSS、JavaScript、图片等静态资源）
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 STATIC_URL = "static/"
+
+# 媒体文件配置（存放用户上传的头像、文件等）
+MEDIA_URL = "/media/"
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+if not os.path.exists(MEDIA_ROOT):
+    os.makedirs(MEDIA_ROOT)
 
 # 跨域配置（开发环境允许所有域名，生产环境替换为具体域名）
 CORS_ALLOW_ALL_ORIGINS = True  # 等价于FastAPI的allow_origins=["*"]

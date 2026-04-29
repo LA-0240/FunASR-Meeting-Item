@@ -48,6 +48,13 @@
           >
             逐字稿
           </button>
+          <button 
+            class="tab-btn" 
+            :class="{ active: activeTab === 'chat' }"
+            @click="activeTab = 'chat'"
+          >
+            智能问答
+          </button>
         </div>
 
         <!-- 内容区域 -->
@@ -74,6 +81,10 @@
                     更换模板
                   </button>
                 </div>
+                <button class="export-btn" @click="exportSummaryToWord">
+                  <span class="icon">📥</span>
+                  导出Word
+                </button>
                 <button class="edit-btn" @click="editSummary" v-if="!isEditingSummary">
                   <span class="icon">✏️</span>
                   编辑
@@ -117,6 +128,10 @@
                     更换模板
                   </button>
                 </div>
+                <button class="export-btn" @click="exportAbstractToWord">
+                  <span class="icon">📥</span>
+                  导出Word
+                </button>
                 <button class="edit-btn" @click="editAbstract" v-if="!isEditingAbstract">
                   <span class="icon">✏️</span>
                   编辑
@@ -154,6 +169,10 @@
                 <span>时间轴分段</span>
               </div>
               <div class="header-actions">
+                <button class="export-btn" @click="exportTimelineToWord">
+                  <span class="icon">📥</span>
+                  导出Word
+                </button>
                 <button class="regenerate-btn" @click="regenerateSegments">
                   <span class="icon">🔄</span>
                   重新生成
@@ -235,6 +254,10 @@
                 <span>逐字稿</span>
               </div>
               <div class="header-actions">
+                <button class="export-btn" @click="exportTranscriptToWord">
+                  <span class="icon">📥</span>
+                  导出Word
+                </button>
                 <button class="regenerate-btn" @click="regenerateTranscription">
                   <span class="icon">🔄</span>
                   重新生成
@@ -284,48 +307,63 @@
                 }"
                 @click="jumpToTranscript(item, index)"
               >
-                <div class="transcript-header">
-                  <div class="speaker-info">
-                    <span 
-                      class="speaker-name"
-                      @click.stop="editingIndex !== index && startEditSpeaker(index, item)"
-                      :class="{ 'clickable': editingIndex !== index }"
-                      :title="editingIndex !== index ? '点击编辑说话人' : ''"
-                    >{{ item.speaker || '未知说话人' }}</span>
-                    <span class="transcript-time">{{ formatTime(item.start_time) }}</span>
-                  </div>
+                <!-- 发言人头像 -->
+                <div class="transcript-avatar" v-if="editingIndex !== index">
+                  <img v-if="item.avatar_url" :src="API_BASE_URL + item.avatar_url" class="transcript-avatar-img" alt="头像" />
+                  <div v-else class="transcript-avatar-default">👤</div>
                 </div>
-                <div class="transcript-text">
-                  <div v-if="editingIndex === index">
-                    <input 
-                      v-model="editingSpeaker" 
-                      class="speaker-input"
-                      placeholder="说话人名称"
-                      @keyup.enter="saveTextEdit(index)"
-                    />
-                    <textarea 
-                      v-model="editingText" 
-                      class="text-editarea"
-                      placeholder="文本内容"
-                      @keyup.enter="!event.shiftKey && saveTextEdit(index)"
-                    ></textarea>
-                    <div class="edit-buttons">
-                      <button class="text-save-btn" @click="saveTextEdit(index)">保存</button>
-                      <button class="text-cancel-btn" @click="cancelTextEdit">取消</button>
+                <div class="transcript-content-area">
+                  <div class="transcript-header">
+                    <div class="speaker-info">
+                      <span 
+                        class="speaker-name"
+                        @click.stop="editingIndex !== index && startEditSpeaker(index, item)"
+                        :class="{ 'clickable': editingIndex !== index }"
+                        :title="editingIndex !== index ? '点击编辑说话人' : ''"
+                      >{{ item.speaker || '未知说话人' }}</span>
+                      <span class="transcript-time">{{ formatTime(item.start_time) }}</span>
                     </div>
                   </div>
-                  <div 
-                    v-else
-                    class="transcript-text-content"
-                    @click.stop="startEditText(index, item)"
-                    :title="'点击编辑文本'"
-                  >
-                    <span v-if="!isCurrentSearchResult(item)">{{ item.text }}</span>
-                    <span v-else v-html="getMatchedText(item)"></span>
+                  <div class="transcript-text">
+                    <div v-if="editingIndex === index">
+                      <input 
+                        v-model="editingSpeaker" 
+                        class="speaker-input"
+                        placeholder="说话人名称"
+                        @keyup.enter="saveTextEdit(index)"
+                      />
+                      <textarea 
+                        v-model="editingText" 
+                        class="text-editarea"
+                        placeholder="文本内容"
+                        @keyup.enter="!event.shiftKey && saveTextEdit(index)"
+                      ></textarea>
+                      <div class="edit-buttons">
+                        <button class="text-save-btn" @click="saveTextEdit(index)">保存</button>
+                        <button class="text-cancel-btn" @click="cancelTextEdit">取消</button>
+                      </div>
+                    </div>
+                    <div 
+                      v-else
+                      class="transcript-text-content"
+                      @click.stop="startEditText(index, item)"
+                      :title="'点击编辑文本'"
+                    >
+                      <span v-if="!isCurrentSearchResult(item)">{{ item.text }}</span>
+                      <span v-else v-html="getMatchedText(item)"></span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
+          </div>
+
+          <!-- 智能问答 -->
+          <div v-if="activeTab === 'chat'" class="chat-content">
+            <MeetingChatPanel 
+              :file-id="fileId" 
+              :user-id="userId"
+            />
           </div>
         </div>
       </div>
@@ -357,6 +395,18 @@
             您的浏览器不支持音频播放
           </audio>
         </div>
+        
+        <!-- 字幕显示区域（仅视频显示） -->
+        <div v-if="isVideoFile && currentSubtitle" class="subtitle-container">
+          <div class="subtitle-avatar">
+            <img v-if="currentSubtitle.avatar_url" :src="API_BASE_URL + currentSubtitle.avatar_url" class="subtitle-avatar-img" alt="头像" />
+            <div v-else class="subtitle-avatar-default">👤</div>
+          </div>
+          <div class="subtitle-content">
+            <div class="subtitle-speaker">{{ currentSubtitle.speaker || '未知说话人' }}</div>
+            <div class="subtitle-text">{{ currentSubtitle.text }}</div>
+          </div>
+        </div>
 
         <!-- 会议统计 -->
         <div class="stats-container">
@@ -374,6 +424,14 @@
               <span class="stat-label">总句数</span>
               <span class="stat-value">{{ totalSentences }}</span>
             </div>
+          </div>
+        </div>
+
+        <!-- 会议类型 -->
+        <div class="meeting-type-container" v-if="file.meeting_type">
+          <h3>会议类型</h3>
+          <div class="meeting-type-tag">
+            {{ file.meeting_type }}
           </div>
         </div>
       </div>
@@ -613,16 +671,50 @@ import { useRouter, useRoute } from 'vue-router';
 import { meetingApi } from '../api/meetingApi';
 import { fileApi } from '../api/fileApi';
 import { promptApi } from '../api/promptApi';
+import { ragApi } from '../api/ragApi';
+import { exportApi } from '../api/exportApi';
+import MeetingChatPanel from './meeting-detail/MeetingChatPanel.vue';
 import { marked } from 'marked';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 export default {
   name: 'MeetingDetailView',
+  components: {
+    MeetingChatPanel
+  },
   setup() {
     const router = useRouter();
     const route = useRoute();
 
     // 文件信息
     const file = ref({});
+
+    // 聊天面板需要的ID
+    const fileId = computed(() => {
+      const id = file.value.id;
+      console.log('📄 MeetingDetailView - fileId:', id, 'type:', typeof id);
+      if (!id) return null;
+      const numId = Number(id);
+      return isNaN(numId) ? null : numId;
+    });
+    const userId = computed(() => {
+      // 尝试从 localStorage 获取用户ID
+      const userInfo = localStorage.getItem('userInfo');
+      if (userInfo) {
+        try {
+          const user = JSON.parse(userInfo);
+          const id = user.id;
+          console.log('👤 MeetingDetailView - userId:', id, 'type:', typeof id);
+          if (!id) return null;
+          const numId = Number(id);
+          return isNaN(numId) ? null : numId;
+        } catch (e) {
+          return null;
+        }
+      }
+      return null;
+    });
 
     // 标签页状态
     const activeTab = ref('summary');
@@ -704,6 +796,9 @@ export default {
     const highlightedSegmentIndex = ref(-1);
     const highlightedTranscriptIndex = ref(-1);
     
+    // 当前字幕
+    const currentSubtitle = ref(null);
+    
     // 用户交互控制
     const lastUserActivity = ref(Date.now());
     const contentPanelRef = ref(null);
@@ -767,8 +862,13 @@ export default {
       return speakers.size;
     });
 
-    // 总句子数
+    // 总句子数（使用原始句子数据）
     const totalSentences = computed(() => {
+      // 优先使用原始句子数据长度
+      if (transcriptionData.value.raw_sentence_info) {
+        return transcriptionData.value.raw_sentence_info.length;
+      }
+      // 兼容旧数据：使用 speaker_info 长度
       return transcriptionData.value.speaker_info?.length || 0;
     });
 
@@ -1575,6 +1675,117 @@ export default {
       }
     };
 
+    // ========== 导出Word文档功能 ==========
+    
+    // 导出会议纪要
+    const exportSummaryToWord = async () => {
+      try {
+        const text = summaryData.value.meeting_summary || '';
+        if (!text.trim()) {
+          alert('会议纪要内容为空，无法导出');
+          return;
+        }
+        
+        const fileName = `${file.value.name || '会议'}_纪要`;
+        await exportApi.exportToWord({
+          transcription_text: text,
+          file_name: fileName
+        });
+      } catch (error) {
+        console.error('导出会议纪要失败:', error);
+        alert('导出失败');
+      }
+    };
+
+    // 导出会议摘要
+    const exportAbstractToWord = async () => {
+      try {
+        const text = abstractData.value.meeting_abstract || '';
+        if (!text.trim()) {
+          alert('会议摘要内容为空，无法导出');
+          return;
+        }
+        
+        const fileName = `${file.value.name || '会议'}_摘要`;
+        await exportApi.exportToWord({
+          transcription_text: text,
+          file_name: fileName
+        });
+      } catch (error) {
+        console.error('导出会议摘要失败:', error);
+        alert('导出失败');
+      }
+    };
+
+    // 导出会议分段（时间轴）
+    const exportTimelineToWord = async () => {
+      try {
+        const segments = segmentsData.value.segments || [];
+        if (!segments.length) {
+          alert('会议分段内容为空，无法导出');
+          return;
+        }
+        
+        // 格式化分段内容
+        let content = '';
+        segments.forEach((seg, index) => {
+          content += `${seg.title || '分段' + (index + 1)}\n`;
+          content += `时间: ${formatTime(seg.start_time)} - ${formatTime(seg.end_time)}\n`;
+          if (seg.content) {
+            content += `内容: ${seg.content}\n`;
+          }
+          if (seg.summary) {
+            content += `小结: ${seg.summary}\n`;
+          }
+          content += '\n';
+        });
+        
+        const fileName = `${file.value.name || '会议'}_时间轴`;
+        await exportApi.exportToWord({
+          transcription_text: content,
+          file_name: fileName
+        });
+      } catch (error) {
+        console.error('导出会议分段失败:', error);
+        alert('导出失败');
+      }
+    };
+
+    // 导出逐字稿
+    const exportTranscriptToWord = async () => {
+      try {
+        const speakerInfo = transcriptionData.value.speaker_info || [];
+        if (!speakerInfo.length) {
+          alert('逐字稿内容为空，无法导出');
+          return;
+        }
+        
+        // 格式化逐字稿内容
+        let content = '';
+        speakerInfo.forEach((item, index) => {
+          const speaker = item.speaker || '未知说话人';
+          const text = item.text || '';
+          const startTime = item.start_time ? formatTime(item.start_time) : '';
+          const endTime = item.end_time ? formatTime(item.end_time) : '';
+          
+          content += `${speaker}`;
+          if (startTime && endTime) {
+            content += ` [${startTime} - ${endTime}]`;
+          }
+          content += `: ${text}\n`;
+        });
+        
+        const fileName = `${file.value.name || '会议'}_逐字稿`;
+        await exportApi.exportToWord({
+          transcription_text: content,
+          file_name: fileName
+        });
+      } catch (error) {
+        console.error('导出逐字稿失败:', error);
+        alert('导出失败');
+      }
+    };
+
     // 保存说话人编辑
     const saveSpeakerEdit = async (index) => {
       await saveTextEdit(index);
@@ -1808,6 +2019,13 @@ export default {
         highlightedTranscriptIndex.value = activeTranscriptIndex;
       }
       
+      // 更新字幕
+      if (activeTranscriptIndex !== -1 && speakerInfo[activeTranscriptIndex]) {
+        currentSubtitle.value = speakerInfo[activeTranscriptIndex];
+      } else {
+        currentSubtitle.value = null;
+      }
+      
       // 每次播放时间更新都检查是否需要滚动（确保持续跟随）
       if (activeTab.value === 'transcript' && activeTranscriptIndex !== -1) {
         scrollToHighlighted('.transcript-item.highlighted');
@@ -1853,6 +2071,8 @@ export default {
           file.value = typeof fileData === 'string' ? JSON.parse(fileData) : fileData;
           console.log('📂 [文件信息] file.value:', file.value);
           console.log('🆔 [文件ID] file.value.id:', file.value.id);
+          console.log('🔍 [文件所有属性] Object.keys(file.value):', Object.keys(file.value));
+          console.log('📌 [会议类型] file.value.meeting_type:', file.value.meeting_type);
           
           // 确保我们有正确的文件ID才发起请求
           if (file.value.id) {
@@ -1895,6 +2115,8 @@ export default {
 
     return {
       file,
+      fileId,
+      userId,
       activeTab,
       loadingSummary,
       loadingAbstract,
@@ -1922,6 +2144,7 @@ export default {
       currentPlayingIndex,
       highlightedSegmentIndex,
       highlightedTranscriptIndex,
+      currentSubtitle,
       contentPanelRef,
       goBack,
       formatDate,
@@ -1953,6 +2176,12 @@ export default {
       cancelTextEdit,
       saveTextEdit,
       saveSpeakerEdit,
+      // 导出Word文档相关
+      exportSummaryToWord,
+      exportAbstractToWord,
+      exportTimelineToWord,
+      exportTranscriptToWord,
+      // 分段相关
       startSegmentEdit,
       cancelSegmentEdit,
       saveSegmentEdit,
@@ -2015,7 +2244,8 @@ export default {
       navigateToPrevious,
       navigateToNext,
       isCurrentSearchResult,
-      getMatchedText
+      getMatchedText,
+      API_BASE_URL
     };
   }
 };
@@ -2181,6 +2411,24 @@ export default {
   background: white;
   font-size: 13px;
   cursor: pointer;
+}
+
+.export-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: 1px solid #67c23a;
+  border-radius: 6px;
+  background: white;
+  color: #67c23a;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.export-btn:hover {
+  background: #f0f9eb;
 }
 
 .regenerate-btn {
@@ -2541,8 +2789,8 @@ export default {
 }
 
 .highlight-yellow {
-  background: #fff3cd;
-  color: #856404;
+  background: #e8f5e9;
+  color: #2e7d32;
   padding: 0 4px;
   border-radius: 3px;
   font-weight: 600;
@@ -2731,6 +2979,65 @@ export default {
   text-align: center;
 }
 
+/* 字幕样式 */
+.subtitle-container {
+  background: white;
+  border-radius: 12px;
+  padding: 12px 16px;
+  border: 1px solid #eee;
+  margin-bottom: 8px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.subtitle-avatar {
+  flex-shrink: 0;
+}
+
+.subtitle-avatar-img {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid #eee;
+}
+
+.subtitle-avatar-default {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #f5f7fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  border: 1px solid #ddd;
+}
+
+.subtitle-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.subtitle-speaker {
+  font-size: 13px;
+  font-weight: 600;
+  color: #409eff;
+  margin-bottom: 4px;
+}
+
+.subtitle-text {
+  font-size: 14px;
+  color: #333;
+  line-height: 1.5;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .stat-label {
   font-size: 12px;
   color: #999;
@@ -2740,6 +3047,53 @@ export default {
   font-size: 18px;
   color: #333;
   font-weight: 600;
+}
+
+.meeting-type-container {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #eee;
+}
+
+.meeting-type-container h3 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  color: #333;
+  font-weight: 600;
+}
+
+.meeting-type-tag {
+  display: inline-block;
+  padding: 8px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 20px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+/* 聊天面板容器 */
+.chat-panel-container {
+  flex: 1;
+  min-height: 300px;
+}
+
+/* 聊天内容区域 */
+.chat-content {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-content :deep(.meeting-chat-panel) {
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  flex: 1;
+  height: 100%;
 }
 
 /* Markdown 样式 */
@@ -3313,8 +3667,115 @@ export default {
   max-height: calc(100vh - 240px);
 }
 
+/* 逐字稿条目 */
+.transcript-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: #f8f9fa;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.transcript-item:hover {
+  background: #f0f0f0;
+}
+
+.transcript-item.highlighted {
+  background: #e6f7ff;
+  border: 2px solid #409eff;
+}
+
+.transcript-item.search-highlight {
+  background: #f6ffed;
+  border: 2px solid #67c23a;
+}
+
+.transcript-item.editing {
+  background: #fff7e6;
+  border: 2px solid #fa8c16;
+}
+
+/* 发言人头像 */
+.transcript-avatar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  padding-top: 2px;
+}
+
+.transcript-avatar-img {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #eee;
+}
+
+.transcript-avatar-default {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #f5f7fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  border: 2px solid #ddd;
+}
+
+/* 内容区域 */
+.transcript-content-area {
+  flex: 1;
+  min-width: 0;
+}
+
 .search-btn:hover {
   background: #85ce61;
 }
   
+</style>
+
+<!-- Markdown 专用样式（非 scoped） - 给 v-html 渲染的内容用 -->
+<style>
+.formatted-content.markdown-body table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  margin: 12px 0 !important;
+  font-size: 14px !important;
+}
+
+.formatted-content.markdown-body th,
+.formatted-content.markdown-body td {
+  border: 1px solid #e5e7eb !important;
+  padding: 8px 12px !important;
+  text-align: left !important;
+}
+
+.formatted-content.markdown-body th {
+  background: #f9fafb !important;
+  font-weight: 600 !important;
+  color: #374151 !important;
+}
+
+.formatted-content.markdown-body tr:nth-child(even) {
+  background: #f9fafb !important;
+}
+
+.formatted-content.markdown-body ul,
+.formatted-content.markdown-body ol {
+  padding-left: 24px !important;
+  margin: 8px 0 !important;
+  list-style-position: outside !important;
+}
+
+.formatted-content.markdown-body ul {
+  list-style-type: disc !important;
+}
+
+.formatted-content.markdown-body ol {
+  list-style-type: decimal !important;
+}
 </style>
