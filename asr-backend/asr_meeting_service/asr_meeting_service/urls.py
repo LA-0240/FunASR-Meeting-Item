@@ -16,6 +16,7 @@ Including another URLconf
 """
 
 
+import os
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
@@ -30,3 +31,5 @@ urlpatterns = [
 # 开发环境下服务媒体文件
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    # 也服务旧的 voiceprints 目录
+    urlpatterns += static('/voiceprints/', document_root=os.path.join(settings.BASE_DIR, 'voiceprints'))

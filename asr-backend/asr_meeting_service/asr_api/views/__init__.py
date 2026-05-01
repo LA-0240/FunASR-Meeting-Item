@@ -6,6 +6,7 @@ from .meeting import MeetingSummaryView, MeetingAbstractView, MeetingSummaryUpda
 from .meeting_analysis import MeetingAnalysisView
 from .export import ExportTranscriptionWordView, ExportSummaryWordView, ExportAbstractWordView
 from .voiceprint import VoiceprintAddView, VoiceprintListView, VoiceprintRenameView, VoiceprintDeleteView, VoiceprintAudioView, VoiceprintAvatarUploadView, VoiceprintAvatarDeleteView
+from .speaker import SpeakerListView, SpeakerAddView, SpeakerUpdateView, SpeakerDeleteView, SpeakerAvatarUploadView, SpeakerAvatarDeleteView, SpeakerVoiceprintAddView, SpeakerVoiceprintDeleteView, SpeakerVoiceprintUpdateView, SpeakerVoiceprintAudioView
 from .user import UserRegisterView, UserLoginView, UserLogoutView, UserProfileView, UserAvatarUploadView, UserAvatarDeleteView
 from .file import FileUploadView, FileListView, FileRenameView, FileDeleteView, FileDownloadView
 from .transcription import TranscriptionSearchView, TranscriptionGetView, TranscriptionEditView, TranscriptionGenerateView
@@ -75,4 +76,15 @@ __all__ = [
     'IndexFileView',
     'IndexStatusView',
     'TestRetrieveView',
+    # Speaker（新增）
+    'SpeakerListView',
+    'SpeakerAddView',
+    'SpeakerUpdateView',
+    'SpeakerDeleteView',
+    'SpeakerAvatarUploadView',
+    'SpeakerAvatarDeleteView',
+    'SpeakerVoiceprintAddView',
+    'SpeakerVoiceprintDeleteView',
+    'SpeakerVoiceprintUpdateView',
+    'SpeakerVoiceprintAudioView',
 ]

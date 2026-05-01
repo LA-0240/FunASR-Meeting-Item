@@ -10,7 +10,8 @@ from asr_api.models import (
     UploadedFile,
     Transcription,
     MeetingSummary,
-    MeetingSegment
+    MeetingSegment,
+    Speaker
 )
 
 # 尝试导入LLM库
@@ -506,6 +507,14 @@ class MeetingAgent:
             # 优先使用原始句子数据，兼容旧数据
             speaker_info = transcription.raw_sentence_info or transcription.speaker_info or []
             
+            print(f"[DEBUG] 发言统计工具获取到的原始 speaker_info 前5条: {speaker_info[:5] if len(speaker_info) > 5 else speaker_info}")
+            
+            # ========== 新增：尝试从 Speaker 表中匹配说话人姓名 ==========
+            user = file_obj.user
+            speakers = Speaker.objects.filter(user=user)
+            speaker_dict = {speaker.name: speaker for speaker in speakers}
+            print(f"[DEBUG] 当前用户共有 {len(speakers)} 个 Speaker: {list(speaker_dict.keys())}")
+            
             if not speaker_info:
                 return {
                     "status": "error",
@@ -516,6 +525,13 @@ class MeetingAgent:
             speaker_stats = {}
             for sent in speaker_info:
                 speaker = sent.get('speaker', '未知说话人')
+                
+                # ========== 修复：如果 speaker 是整数，强制转换成字符串 ==========
+                if isinstance(speaker, int):
+                    speaker = f"spk-{speaker}"
+                elif not isinstance(speaker, str):
+                    speaker = str(speaker)
+                
                 start = sent.get('start_time', 0)
                 end = sent.get('end_time', 0)
                 duration = end - start if end > start else 0
@@ -649,7 +665,29 @@ class MeetingAgent:
             # 优先使用原始句子数据，兼容旧数据
             speaker_info = transcription.raw_sentence_info or transcription.speaker_info or []
             
-            # 尝试获取会议纪要和摘要作为补充
+            print(f"[DEBUG] RAG 获取到的原始 speaker_info 前5条: {speaker_info[:5] if len(speaker_info) > 5 else speaker_info}")
+            
+            # ========== 新增：尝试从 Speaker 表中匹配说话人姓名 ==========
+            user = file_obj.user
+            speakers = Speaker.objects.filter(user=user)
+            speaker_dict = {speaker.name: speaker for speaker in speakers}
+            print(f"[DEBUG] 当前用户共有 {len(speakers)} 个 Speaker: {list(speaker_dict.keys())}")
+            
+            updated_speaker_info = []
+            for sent in speaker_info:
+                new_sent = sent.copy()
+                speaker_name = sent.get('speaker', '未知说话人')
+                
+                # ========== 修复：如果 speaker 是整数，强制转换成字符串 ==========
+                if isinstance(speaker_name, int):
+                    speaker_name = f"spk-{speaker_name}"
+                elif not isinstance(speaker_name, str):
+                    speaker_name = str(speaker_name)
+                
+                new_sent['speaker'] = speaker_name
+                updated_speaker_info.append(new_sent)
+            
+            # ========== 尝试获取会议纪要和摘要作为补充 ==========
             meeting_summary = None
             meeting_abstract = None
             try:
@@ -659,11 +697,12 @@ class MeetingAgent:
             except:
                 pass
             
-            print(f"✅ 完整逐字稿工具返回数据: {len(speaker_info)} 条记录")
+            print(f"[DEBUG] RAG 最终使用的 speaker_info 前5条: {updated_speaker_info[:5] if len(updated_speaker_info) > 5 else updated_speaker_info}")
+            print(f"✅ 完整逐字稿工具返回数据: {len(updated_speaker_info)} 条记录")
             return {
                 "status": "success",
                 "file_name": file_obj.original_name,
-                "speaker_info": speaker_info,
+                "speaker_info": updated_speaker_info,
                 "meeting_summary": meeting_summary,
                 "meeting_abstract": meeting_abstract
             }

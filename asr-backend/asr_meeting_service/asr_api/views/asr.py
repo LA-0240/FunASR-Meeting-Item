@@ -14,8 +14,8 @@ from datetime import datetime
 import traceback
 import numpy as np
 from ..utils import extract_audio_from_video
-from ..models import Voiceprint, asr_model
-from ..voiceprint_utils import extract_voiceprint_feature, check_voiceprint_duplicate, match_voiceprint
+from ..models import Voiceprint, Speaker, asr_model
+from ..voiceprint_utils import extract_voiceprint_feature, check_voiceprint_duplicate, match_voiceprint, append_voiceprint
 import subprocess
 from collections import defaultdict
 
@@ -65,17 +65,7 @@ class ASRTranscribeView(APIView):
                 hotword=hotword,
                 punc=True,
                 spk_segment=True,
-                speaker_diarization=True,
-                merge_vad=True,
-                max_single_segment_time=30,
-                # === 优化：VAD和最小说话片段参数 ===
-                vad_kwargs={
-                    "min_silence_duration_ms": 300,    # 最小静音时长（毫秒）
-                    "speech_pad_ms": 200,              # 语音前后填充（毫秒）
-                },
-                spk_kwargs={
-                    "min_spk_len_s": 1.5,              # 最小说话片段时长（秒），过滤超短噪音
-                }
+                speaker_diarization=True
             )
 
             # 4. 格式化结果
@@ -110,7 +100,7 @@ class ASRTranscribeView(APIView):
 
             # ===================== 步骤2：对每个说话人，用ffmpeg切割 → 声纹匹配 =====================
             print(f"[{datetime.now()}] 第二步：说话人声纹匹配（共{len(speaker_segments)}人）")
-            speaker_name_map = {}
+            speaker_info_map = {}  # {spk_id: {"name": "...", "avatar_url": "...", "speaker_obj": Speaker}}
 
             for spk_id, segments in speaker_segments.items():
                 # === 优化：选择 TOP 3 最长片段，提取特征取平均 ===
@@ -153,76 +143,119 @@ class ASRTranscribeView(APIView):
                     print(f"ASR 用户认证状态: {request.user.is_authenticated}")
                     print(f"ASR 用户: {request.user.username if request.user.is_authenticated else '匿名'}")
                     # 传入会议中的说话人数量用于动态阈值
-                    name = match_voiceprint(avg_feat, user=user, speaker_count=len(speaker_segments))
-                    print(f"ASR 声纹匹配结果 (基于{len(features)}个片段平均): {name}")
-                    speaker_name_map[spk_id] = name if name else f"spk-{spk_id}"
+                    result, similarity = match_voiceprint(avg_feat, user=user, speaker_count=len(speaker_segments))
+                    
+                    # 处理匹配结果
+                    if isinstance(result, Speaker):
+                        # 匹配到了新模型的 Speaker
+                        name = result.name
+                        avatar_url = f"/media/{result.avatar.name}" if result.avatar else None
+                        speaker_info_map[spk_id] = {
+                            "name": name,
+                            "avatar_url": avatar_url,
+                            "speaker_obj": result
+                        }
+                        # 如果我们有上传的文件，自动追加声纹
+                        if len(segments) > 0:
+                            best_start, best_end = segments[0]
+                            clip_path = os.path.join(settings.TEMP_DIR, f"voiceprint_append_{uuid.uuid4()}.wav")
+                            try:
+                                subprocess.run([
+                                    "ffmpeg",
+                                    "-ss", str(best_start / 1000.0),
+                                    "-t", str((best_end - best_start) / 1000.0),
+                                    "-i", temp_file,
+                                    "-ar", "16000",
+                                    "-ac", "1",
+                                    "-y",
+                                    clip_path
+                                ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                
+                                # 追加声纹
+                                if user.is_authenticated:
+                                    # 🔧 修复：保存到 voiceprint_audio 目录（media下的），通过 Django FileField 保存！
+                                    # 🔧 注意：这里不自己处理路径，传给 append_voiceprint 的是音频的文件路径，由 append_voiceprint 处理！
+                                    
+                                    # 🔧 修复：从 request.uploaded_file 获取
+                                    upload_file_obj = getattr(request, 'uploaded_file', None)
+                                    append_voiceprint(
+                                        speaker=result,
+                                        feature=avg_feat,
+                                        user=user,
+                                        audio_path=clip_path,  # 直接给临时音频路径，由 append_voiceprint 处理保存
+                                        source_meeting=upload_file_obj,
+                                        source_type='auto'  # 自动追加
+                                    )
+                            finally:
+                                # 🔧 修复：清理临时文件（等 append_voiceprint 用完再删！）
+                                if os.path.exists(clip_path):
+                                    try:
+                                        os.remove(clip_path)
+                                    except:
+                                        pass
+                    else:
+                        # 旧模型或者无匹配
+                        name = result
+                        final_name = name if name else f"spk-{spk_id}"
+                        speaker_info_map[spk_id] = {
+                            "name": final_name,
+                            "avatar_url": None,
+                            "speaker_obj": None
+                        }
+                    
+                    print(f"ASR 声纹匹配结果（基于{len(features)}个片段平均）: {name}")
                 else:
-                    speaker_name_map[spk_id] = f"spk-{spk_id}"
+                    speaker_info_map[spk_id] = {
+                        "name": f"spk-{spk_id}",
+                        "avatar_url": None,
+                        "speaker_obj": None
+                    }
 
                 # 清理临时文件
                 for clip_path in clip_paths:
                     if os.path.exists(clip_path):
                         os.remove(clip_path)
 
-            # ===================== 步骤3：后处理平滑优化 =====================
-            print(f"[{datetime.now()}] 第三步：说话人平滑后处理")
+            # ===================== 步骤3：构建统一格式的分段数据 =====================
+            print(f"[{datetime.now()}] 第三步：构建分段数据")
             matched_speakers = {}
-            for spk_id, name in speaker_name_map.items():
+            for spk_id, info in speaker_info_map.items():
+                name = info["name"]
                 if not name.startswith("spk-"):
-                    matched_speakers[spk_id] = name
+                    matched_speakers[spk_id] = {
+                        "name": name,
+                        "avatar_url": info["avatar_url"]
+                    }
 
-            # 先构建原始结果列表
-            raw_result = []
+            # 构建统一格式的结果
+            segments = []
             for seg in sentence_info:
                 spk_id = seg.get("spk") or seg.get("sp") or 0
-                name = speaker_name_map.get(spk_id, f"spk-{spk_id}")
+                info = speaker_info_map.get(spk_id, {"name": f"spk-{spk_id}", "avatar_url": None})
+                name = info["name"]
+                avatar_url = info["avatar_url"]
                 
-                raw_result.append({
-                    "spk": name,
+                segments.append({
+                    "speaker": name,
+                    "avatar_url": avatar_url,
                     "text": seg.get("text", "").strip(),
                     "start_time": round(seg.get("start", 0) / 1000, 2),
                     "end_time": round(seg.get("end", 0) / 1000, 2),
                     "original_spk": spk_id
                 })
 
-            # === 优化1：过滤超短片段（<0.5秒）===
-            temp_result = []
-            for seg in raw_result:
-                duration = seg["end_time"] - seg["start_time"]
-                if duration >= 0.5:  # 只保留>=0.5秒的片段
-                    temp_result.append(seg)
-                else:
-                    # 超短片段的文本附到上一个同说话人
-                    if temp_result and temp_result[-1]["spk"] == seg["spk"]:
-                        temp_result[-1]["text"] += " " + seg["text"]
-                        temp_result[-1]["end_time"] = seg["end_time"]
-
-            # === 优化2：合并同一说话人连续片段（间隔<3秒）===
-            formatted_result = []
-            for seg in temp_result:
-                if formatted_result and formatted_result[-1]["spk"] == seg["spk"]:
-                    prev = formatted_result[-1]
-                    gap = seg["start_time"] - prev["end_time"]
-                    if gap < 3.0:  # 间隔小于3秒，合并
-                        prev["text"] += " " + seg["text"]
-                        prev["end_time"] = seg["end_time"]
-                    else:
-                        formatted_result.append(seg)
-                else:
-                    formatted_result.append(seg)
-
             # ===================== 返回 =====================
             return Response({
                 "status": "success",
                 "filename": file.name,
-                "transcription": formatted_result,
-                "sentence_info": sentence_info,  # 新增：返回原始句子数据（不合并）
+                "transcription": segments,  # 合并和原始统一使用 segments
+                "sentence_info": segments,  # 兼容旧接口
+                "segments": segments,  # 新接口字段
                 "speaker_stats": {
                     "total_speakers": len(speaker_ids),
                     "speaker_ids": sorted(list(speaker_ids)),
                     "matched_speakers": matched_speakers,
-                    "total_sentences": len(sentence_info),  # 新增：原始句子总数
-                    "merged_sentences": len(formatted_result)  # 新增：合并后句子数
+                    "total_sentences": len(segments)
                 },
                 "note": "已启用标点恢复+说话人识别+时间戳 + 离线声纹匹配",
                 "timestamp": datetime.now().isoformat()

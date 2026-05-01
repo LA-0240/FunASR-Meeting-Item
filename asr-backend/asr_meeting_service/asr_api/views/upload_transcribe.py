@@ -86,6 +86,7 @@ class FileUploadTranscribeView(APIView):
                 }
                 mock_request.user = request.user
                 mock_request.META = request.META
+                mock_request.uploaded_file = uploaded_file  # 🔧 把 uploaded_file 放到 mock_request 上！
                 
                 # 调用ASR接口
                 asr_response = asr_view.post(mock_request)
@@ -106,6 +107,7 @@ class FileUploadTranscribeView(APIView):
                 }
                 mock_request.user = request.user
                 mock_request.META = request.META
+                mock_request.uploaded_file = uploaded_file  # 🔧 把 uploaded_file 放到 mock_request 上！
                 
                 # 调用视频ASR接口
                 asr_response = video_view.post(mock_request)
@@ -120,43 +122,34 @@ class FileUploadTranscribeView(APIView):
                     status=HTTP_400_BAD_REQUEST
                 )
             
-            # 7. 提取转录结果
+            # 7. 提取转录结果（使用新的 segments 字段）
             transcription_data = asr_response.data
-            transcription_list = transcription_data.get('transcription', [])  # 已匹配声纹的格式化数据（spk=张三）
-            original_sentence_info = transcription_data.get('sentence_info', [])  # 原始句子数据（未合并）
+            segments = transcription_data.get('segments', transcription_data.get('transcription', []))
             
-            # 8. 格式化转录数据（使用已匹配声纹的数据）
-            speaker_info = []
-            for item in transcription_list:
-                speaker_info.append({
-                    'speaker': item.get('spk', '未知说话人'),  # 已匹配的名称（如"张三"）
+            # 8. 格式化统一的 segments
+            unified_segments = []
+            for item in segments:
+                # 兼容两种格式：spk 或 speaker
+                speaker_name = item.get('spk', item.get('speaker', '未知说话人'))
+                unified_segments.append({
+                    'speaker': speaker_name,
+                    'avatar_url': item.get('avatar_url'),
                     'text': item.get('text', ''),
                     'start_time': item.get('start_time', 0),
                     'end_time': item.get('end_time', 0),
                     'original_spk': item.get('original_spk', '')
                 })
             
-            # 9. 格式化原始句子数据（保留完整原始信息）
-            raw_sentence_info = []
-            if original_sentence_info:
-                for item in original_sentence_info:
-                    raw_sentence_info.append({
-                        'speaker': item.get('spk') or item.get('sp', '未知说话人'),
-                        'text': item.get('text', ''),
-                        'start_time': round(item.get('start', 0) / 1000, 2),
-                        'end_time': round(item.get('end', 0) / 1000, 2),
-                        'original_spk': item.get('spk') or item.get('sp', 0)
-                    })
+            # 9. 生成转录文本
+            transcription_text = '\n'.join([f"{item['speaker']}: {item['text']}" for item in unified_segments])
             
-            # 10. 生成转录文本（使用已匹配声纹的数据）
-            transcription_text = '\n'.join([f"{item.get('spk', '未知说话人')}: {item.get('text', '')}" for item in transcription_list])
-            
-            # 11. 保存逐字稿（已匹配数据 + 原始句子数据）
+            # 10. 保存逐字稿（同时更新新旧字段，保持兼容）
             transcription = Transcription(
                 file=uploaded_file,
                 transcription_text=transcription_text,
-                speaker_info=speaker_info,  # 合并优化后的数据
-                raw_sentence_info=raw_sentence_info if raw_sentence_info else speaker_info  # 原始句子数据
+                speaker_info=unified_segments,  # 旧字段
+                raw_sentence_info=unified_segments,  # 旧字段
+                segments=unified_segments  # 新字段
             )
             transcription.save()
             

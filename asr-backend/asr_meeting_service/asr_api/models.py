@@ -83,22 +83,52 @@ class AudioRecord(models.Model):
     def __str__(self):
         return self.filename
 
+class Speaker(models.Model):
+    """说话人主表（一人一条记录）"""
+    name = models.CharField(max_length=100, verbose_name="说话人姓名")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="所属用户")
+    avatar = models.ImageField(upload_to='speaker_avatars/', blank=True, null=True, verbose_name="头像")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    class Meta:
+        verbose_name = "说话人"
+        verbose_name_plural = "说话人列表"
+        unique_together = ('user', 'name')
+
+    def __str__(self):
+        return f"{self.user.username}: {self.name}"
+
+
 class Voiceprint(models.Model):
-    name = models.CharField(max_length=100, verbose_name="声纹名称")
-    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="所属用户")  # 新增外键关联
+    """声纹子表（一个说话人可以有多条）"""
+    speaker = models.ForeignKey(Speaker, on_delete=models.CASCADE, related_name='voiceprints', verbose_name="所属说话人", null=True, blank=True)
+    # 保留旧字段，用于兼容（将来迁移后可以移除）
+    name = models.CharField(max_length=100, blank=True, null=True, verbose_name="声纹名称（旧字段，兼容用）")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="所属用户")
     avatar = models.ImageField(upload_to='voiceprint_avatars/', blank=True, null=True, verbose_name="声纹头像")
     feature = models.BinaryField(verbose_name="声纹特征（二进制存储）")
-    file_path = models.CharField(max_length=500, blank=True, null=True, verbose_name="声纹文件路径")
+    file_path = models.CharField(max_length=500, blank=True, null=True, verbose_name="声纹文件路径（旧字段，兼容用）")
+    audio_file = models.FileField(upload_to='voiceprint_audio/', blank=True, null=True, verbose_name="声纹对应音频")
+    source_type = models.CharField(
+        max_length=20,
+        choices=[('manual', '手动注册'), ('auto', '会议自动采集')],
+        default='manual',
+        verbose_name="声纹来源"
+    )
+    source_meeting = models.ForeignKey('asr_api.UploadedFile', on_delete=models.SET_NULL, blank=True, null=True, verbose_name="来源会议")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
 
     class Meta:
         verbose_name = "声纹信息"
         verbose_name_plural = "声纹信息"
-        unique_together = ('user', 'name')  # 确保每个用户的声纹名称唯一
+        ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.user.username}: {self.name}"
+        if self.speaker:
+            return f"{self.speaker.name} - {self.created_at.strftime('%Y-%m-%d')}"
+        return f"{self.name or '未命名'} - {self.created_at.strftime('%Y-%m-%d')}"
 
     @staticmethod
     def feature_to_binary(feature):
@@ -140,10 +170,22 @@ class Transcription(models.Model):
     """转录模型"""
     file = models.OneToOneField(UploadedFile, on_delete=models.CASCADE, verbose_name="关联文件")
     transcription_text = models.TextField(verbose_name="转录文本")
-    speaker_info = models.JSONField(blank=True, null=True, verbose_name="说话人信息（已合并优化）")
-    raw_sentence_info = models.JSONField(blank=True, null=True, verbose_name="原始句子数据（未合并）")
+    speaker_info = models.JSONField(blank=True, null=True, verbose_name="说话人信息（已合并优化）")  # 暂时保留
+    raw_sentence_info = models.JSONField(blank=True, null=True, verbose_name="原始句子数据（未合并）")  # 暂时保留
+    segments = models.JSONField(blank=True, null=True, verbose_name="句子分段数据（新）")  # 新增统一字段
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    @property
+    def unified_segments(self):
+        """获取统一的分段数据（兼容新旧数据）"""
+        if self.segments:
+            return self.segments
+        if self.speaker_info:
+            return self.speaker_info
+        if self.raw_sentence_info:
+            return self.raw_sentence_info
+        return []
 
     class Meta:
         verbose_name = "转录记录"

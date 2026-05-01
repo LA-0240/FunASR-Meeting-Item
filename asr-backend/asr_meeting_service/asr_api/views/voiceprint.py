@@ -268,27 +268,53 @@ class VoiceprintAudioView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
             
-            # 2. 检查文件是否存在
-            if not voiceprint.file_path or not os.path.exists(voiceprint.file_path):
-                return Response(
-                    {"status": "failed", "detail": "声纹文件不存在"},
-                    status=status.HTTP_404_NOT_FOUND
-                )
+            # 2. 检查文件是否存在（优先 file_path，其次 audio_file）
+            audio_path = None
+            print(f'[DEBUG] VoiceprintAudioView 声纹 {vp_id}:')
+            print(f'  - file_path: {voiceprint.file_path}')
+            print(f'  - audio_file: {voiceprint.audio_file.name if voiceprint.audio_file else None}')
+            
+            if voiceprint.file_path and os.path.exists(voiceprint.file_path):
+                print(f'  - ✅ 使用 file_path: {voiceprint.file_path}')
+                audio_path = voiceprint.file_path
+            elif voiceprint.audio_file and os.path.exists(voiceprint.audio_file.path):
+                print(f'  - ✅ 使用 audio_file: {voiceprint.audio_file.path}')
+                audio_path = voiceprint.audio_file.path
+            else:
+                print(f'  - ❌ 未找到任何音频文件！')
+            
+            if not audio_path:
+                # 最后尝试：直接看 voiceprints 目录里有没有对应文件
+                # 尝试从旧的 file_path 提取路径
+                if voiceprint.file_path:
+                    import os
+                    from django.conf import settings
+                    # 看看文件是不是在 voiceprints/ 目录里
+                    possible_path = voiceprint.file_path
+                    if os.path.exists(possible_path):
+                        print(f'  - ⚠️  兜底成功！找到文件: {possible_path}')
+                        audio_path = possible_path
+                
+                if not audio_path:
+                    return Response(
+                        {"status": "failed", "detail": "声纹文件不存在"},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
             
             # 3. 读取文件内容并返回
             from django.http import FileResponse
             import mimetypes
             
             # 确定文件的MIME类型
-            mime_type, _ = mimetypes.guess_type(voiceprint.file_path)
+            mime_type, _ = mimetypes.guess_type(audio_path)
             if not mime_type:
                 mime_type = 'audio/wav'  # 默认MIME类型
             
             # 直接使用文件路径创建FileResponse
             try:
-                response = FileResponse(open(voiceprint.file_path, 'rb'), content_type=mime_type)
+                response = FileResponse(open(audio_path, 'rb'), content_type=mime_type)
                 # 设置文件名
-                filename = os.path.basename(voiceprint.file_path)
+                filename = os.path.basename(audio_path)
                 response['Content-Disposition'] = f'inline; filename="{filename}"'
                 return response
             except Exception as e:

@@ -27,6 +27,17 @@ from .views import (
     VoiceprintAudioView,
     VoiceprintAvatarUploadView,
     VoiceprintAvatarDeleteView,
+    # Speaker管理接口（新增）
+    SpeakerListView,
+    SpeakerAddView,
+    SpeakerUpdateView,
+    SpeakerDeleteView,
+    SpeakerAvatarUploadView,
+    SpeakerAvatarDeleteView,
+    SpeakerVoiceprintAddView,
+    SpeakerVoiceprintDeleteView,
+    SpeakerVoiceprintUpdateView,
+    SpeakerVoiceprintAudioView,
     # 用户管理接口
     UserRegisterView,
     UserLoginView,
@@ -95,6 +106,18 @@ urlpatterns = [
     path('voiceprint/audio/<int:vp_id>', VoiceprintAudioView.as_view(), name='voiceprint-audio'), # 声纹音频文件获取
     path('voiceprint/avatar/upload/<int:vp_id>', VoiceprintAvatarUploadView.as_view(), name='voiceprint-avatar-upload'), # 声纹头像上传
     path('voiceprint/avatar/delete/<int:vp_id>', VoiceprintAvatarDeleteView.as_view(), name='voiceprint-avatar-delete'), # 声纹头像删除
+    
+    # Speaker管理接口（新增）
+    path('speaker/list', SpeakerListView.as_view(), name='speaker-list'), # Speaker列表
+    path('speaker/add', SpeakerAddView.as_view(), name='speaker-add'), # Speaker创建
+    path('speaker/update', SpeakerUpdateView.as_view(), name='speaker-update'), # Speaker更新
+    path('speaker/delete', SpeakerDeleteView.as_view(), name='speaker-delete'), # Speaker删除
+    path('speaker/avatar/upload/<int:sp_id>', SpeakerAvatarUploadView.as_view(), name='speaker-avatar-upload'), # Speaker头像上传
+    path('speaker/avatar/delete/<int:sp_id>', SpeakerAvatarDeleteView.as_view(), name='speaker-avatar-delete'), # Speaker头像删除
+    path('speaker/<int:sp_id>/voiceprint/add', SpeakerVoiceprintAddView.as_view(), name='speaker-voiceprint-add'), # 给Speaker追加声纹
+    path('speaker/<int:sp_id>/voiceprint/delete/<int:vp_id>', SpeakerVoiceprintDeleteView.as_view(), name='speaker-voiceprint-delete'), # 删除Speaker的声纹
+    path('speaker/<int:sp_id>/voiceprint/update/<int:vp_id>', SpeakerVoiceprintUpdateView.as_view(), name='speaker-voiceprint-update'), # 更新Speaker的声纹
+    path('speaker/<int:sp_id>/voiceprint/audio/<int:vp_id>', SpeakerVoiceprintAudioView.as_view(), name='speaker-voiceprint-audio'), # 获取Speaker声纹音频
 
     # 用户接口
     path('user/register', UserRegisterView.as_view(), name='user-register'), # 用户注册

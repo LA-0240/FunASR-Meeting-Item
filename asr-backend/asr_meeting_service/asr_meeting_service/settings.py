@@ -165,9 +165,9 @@ AUTH_USER_MODEL = 'asr_api.User'
 
 # 自定义配置（LLM和ASR相关）
 LLM_CONFIG = {
-    "api_key": "ms-74ceb98c-5801-46ae-90c3-e5e5bb9bb886",  # 替换为实际Token
+    "api_key": "ms-adac2d0b-1859-477d-ad15-99173fd37c11",  # 替换为实际Token
     "base_url": "https://api-inference.modelscope.cn/v1/",
-    "model_name": "Qwen/Qwen3.5-35B-A3B"
+    "model_name": "Qwen/Qwen3.5-35B-A3B"    
 }
 ALLOWED_EXTENSIONS = ('.wav', '.mp3', '.ogg', '.flac')  # 支持的音频格式
 

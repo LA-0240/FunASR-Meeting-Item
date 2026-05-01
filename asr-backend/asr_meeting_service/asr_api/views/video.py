@@ -14,7 +14,7 @@ from datetime import datetime
 import traceback
 import numpy as np
 from ..utils import extract_audio_from_video
-from ..models import Voiceprint, asr_model
+from ..models import Voiceprint, asr_model, Speaker
 from ..voiceprint_utils import extract_voiceprint_feature, check_voiceprint_duplicate, match_voiceprint
 import subprocess
 from collections import defaultdict
@@ -84,9 +84,7 @@ class VideoASRTranscribeView(APIView):
                     hotword=hotword,
                     punc=True,
                     spk_segment=True,
-                    speaker_diarization=True,
-                    merge_vad=True,
-                    max_single_segment_time=30
+                    speaker_diarization=True
                 )
             except IndexError as e:
                 print(f"{datetime.now()} - 说话人识别失败，降级为纯文本转写：{str(e)}")
@@ -95,9 +93,7 @@ class VideoASRTranscribeView(APIView):
                     batch_size_s=batch_size_s,
                     hotword=hotword,
                     punc=True,
-                    spk_segment=False,
-                    merge_vad=True,
-                    max_single_segment_time=30
+                    spk_segment=False
                 )
             except Exception as e:
                 return Response(
@@ -135,7 +131,7 @@ class VideoASRTranscribeView(APIView):
 
             # ===================== 第二步：每人独立声纹匹配（核心） =====================
             print(f"[{datetime.now()}] 视频处理第二步：{len(speaker_segments)} 个说话人进行声纹匹配")
-            speaker_name_map = {}
+            speaker_info_map = {}  # {spk_id: {"name": "...", "avatar_url": "...", "speaker_obj": Speaker}}
 
             for spk_id, segments in speaker_segments.items():
                 segments.sort(key=lambda x: x[1]-x[0], reverse=True)
@@ -164,27 +160,67 @@ class VideoASRTranscribeView(APIView):
                     print(f"视频处理用户认证状态: {request.user.is_authenticated}")
                     print(f"视频处理用户: {request.user.username if request.user.is_authenticated else '匿名'}")
                     # 传入会议中的说话人数量用于动态阈值
-                    name = match_voiceprint(feat, user=user, speaker_count=len(speaker_segments))
-                    print(f"视频处理声纹匹配结果: {name}")
-                    speaker_name_map[spk_id] = name if name else f"spk-{spk_id}"
+                    match_result = match_voiceprint(feat, user=user, speaker_count=len(speaker_segments))
+                    # 解包返回值 (name, similarity)
+                    if isinstance(match_result, tuple) and len(match_result) == 2:
+                        speaker_obj, similarity = match_result
+                    else:
+                        speaker_obj = match_result
+                        similarity = 0
+                    
+                    # 处理匹配结果
+                    if isinstance(speaker_obj, Speaker):
+                        # 匹配到了新模型的 Speaker
+                        name = speaker_obj.name
+                        avatar_url = f"/media/{speaker_obj.avatar.name}" if speaker_obj.avatar else None
+                        speaker_info_map[spk_id] = {
+                            "name": name,
+                            "avatar_url": avatar_url,
+                            "speaker_obj": speaker_obj
+                        }
+                    else:
+                        # 旧模型或者无匹配
+                        name = speaker_obj
+                        final_name = name if name else f"spk-{spk_id}"
+                        speaker_info_map[spk_id] = {
+                            "name": final_name,
+                            "avatar_url": None,
+                            "speaker_obj": None
+                        }
+                    
+                    print(f"视频处理声纹匹配结果: name={name}, similarity={similarity}")
                 else:
-                    speaker_name_map[spk_id] = f"spk-{spk_id}"
+                    speaker_info_map[spk_id] = {
+                        "name": f"spk-{spk_id}",
+                        "avatar_url": None,
+                        "speaker_obj": None
+                    }
 
                 if os.path.exists(clip_path):
                     os.remove(clip_path)
 
             # ===================== 最终结果拼接 =====================
-            formatted_result = []
             matched_speakers = {}
-            for spk_id, name in speaker_name_map.items():
-                if not name.startswith("spk-"):
-                    matched_speakers[spk_id] = name
+            for spk_id, info in speaker_info_map.items():
+                name = info["name"]
+                if name and isinstance(name, str) and not name.startswith("spk-"):
+                    matched_speakers[spk_id] = {
+                        "name": name,
+                        "avatar_url": info["avatar_url"]
+                    }
 
+            segments = []
             for seg in sentence_info:
                 spk_id = seg.get("spk") or seg.get("sp") or 0
-                name = speaker_name_map.get(spk_id, f"spk-{spk_id}")
-                formatted_result.append({
-                    "spk": name,
+                info = speaker_info_map.get(spk_id, {"name": f"spk-{spk_id}", "avatar_url": None})
+                name = info["name"]
+                avatar_url = info["avatar_url"]
+                # 确保 name 是 string
+                if not name or not isinstance(name, str):
+                    name = f"spk-{spk_id}"
+                segments.append({
+                    "speaker": name,
+                    "avatar_url": avatar_url,
                     "text": seg.get("text", "").strip(),
                     "start_time": round(seg.get("start", 0)/1000, 2),
                     "end_time": round(seg.get("end", 0)/1000, 2),
@@ -195,14 +231,14 @@ class VideoASRTranscribeView(APIView):
             return Response({
                 "status": "success",
                 "filename": file.name,
-                "transcription": formatted_result,
-                "sentence_info": sentence_info,  # 新增：返回原始句子数据
+                "transcription": segments,
+                "sentence_info": segments,  # 兼容旧接口
+                "segments": segments,  # 新接口字段
                 "speaker_stats": {
                     "total_speakers": len(speaker_ids),
                     "speaker_ids": sorted(list(speaker_ids)),
                     "matched_speakers": matched_speakers,
-                    "total_sentences": len(sentence_info),  # 新增：原始句子总数
-                    "merged_sentences": len(formatted_result)  # 新增：合并后句子数
+                    "total_sentences": len(segments)
                 },
                 "note": "视频已处理：分离+声纹识别完成",
                 "timestamp": datetime.now().isoformat()

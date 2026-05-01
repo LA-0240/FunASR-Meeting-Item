@@ -1,226 +1,274 @@
 <template>
-  <div class="voiceprint-container" ref="containerRef" @click="handleClickOutside">
+  <div class="voiceprint-container" ref="containerRef">
     <!-- 顶部标签栏 -->
     <div class="section-header">
       <div class="section-tabs">
-        <span class="section-tab active">全部声纹</span>
-      </div>
-      <div class="view-toggle">
-        <button @click="viewMode = 'grid'" :class="{ active: viewMode === 'grid' }">
-          <span class="icon">🗂️</span>
-        </button>
-        <button @click="viewMode = 'list'" :class="{ active: viewMode === 'list' }">
-          <span class="icon">📋</span>
-        </button>
+        <span class="section-tab active">全部说话人</span>
       </div>
     </div>
 
     <!-- 操作栏 -->
     <div class="action-bar">
       <div class="search-box">
-        <input type="text" v-model="searchKeyword" placeholder="搜索声纹名称..." class="search-input" />
+        <input type="text" v-model="searchKeyword" placeholder="搜索说话人姓名..." class="search-input" />
         <button class="search-btn" @click="handleSearch">
           <span class="icon">🔍</span>
         </button>
       </div>
       <div class="add-btn" @click="showAddModal = true">
         <span class="icon">➕</span>
-        <span>添加声纹</span>
+        <span>添加说话人</span>
       </div>
     </div>
 
-    <!-- 声纹列表 -->
-    <div class="content-area">
-      <div v-if="loading" class="loading">加载中...</div>
-      <div v-else-if="filteredVoiceprints.length === 0" class="empty">
-        {{ searchKeyword ? '没有找到匹配的声纹' : '暂无声纹数据' }}
-      </div>
-      <div v-else>
-        <!-- 网格视图 -->
-        <div v-if="viewMode === 'grid'" class="grid-view">
-          <div 
-            v-for="item in filteredVoiceprints" 
-            :key="item.id" 
-            class="grid-item"
-            :class="{ 'playing-orange': playingId === item.id && !isPaused, 'playing-green': playingId === item.id && isPaused }"
-            @click="handleTogglePlay(item)"
+    <!-- 主内容区 -->
+    <div class="main-content">
+      <!-- 左侧：Speaker 列表 -->
+      <div class="speakers-list">
+        <div v-if="loading" class="loading">加载中...</div>
+        <div v-else-if="speakers.length === 0" class="empty">
+          {{ searchKeyword ? '没有找到匹配的说话人' : '暂未添加说话人' }}
+        </div>
+        <div v-else>
+          <div
+            v-for="sp in speakers"
+            :key="sp.id"
+            class="speaker-item"
+            :class="{ active: selectedSpeaker?.id === sp.id }"
+            @click="handleSelectSpeaker(sp)"
           >
-            <div class="item-preview">
-              <div class="avatar-container">
-                <img v-if="item.avatar_url" :src="API_BASE_URL + item.avatar_url" class="voiceprint-avatar" alt="声纹头像" @click.stop="showAvatarModal(item)" />
-                <div v-else class="avatar-default" @click.stop="showAvatarModal(item)">👤</div>
-              </div>
-              <div v-if="playingId === item.id" class="sound-waves" :class="{ paused: isPaused }">
-                <div class="wave"></div>
-                <div class="wave"></div>
-                <div class="wave"></div>
-                <div class="wave"></div>
-                <div class="wave"></div>
-              </div>
+            <div class="speaker-avatar">
+              <img v-if="sp.avatar_url" :src="API_BASE_URL + sp.avatar_url" class="speaker-avatar-img" alt="说话人头像" />
+              <div v-else class="speaker-avatar-default">👤</div>
             </div>
-            <div class="item-info">
-              <div class="item-name">{{ item.name }}</div>
-              <div class="item-meta">
-                <span>{{ formatDate(item.created_at) }}</span>
+            <div class="speaker-info">
+              <div class="speaker-name">{{ sp.name }}</div>
+              <div class="speaker-meta">
+                <span>{{ formatDate(sp.created_at) }}</span>
+                <span class="voice-count"> {{ sp.voiceprints_count }} 条声纹</span>
               </div>
-            </div>
-            <div class="item-actions" @click.stop>
-              <button @click="handleRename(item)">重命名</button>
-              <button @click="showAvatarModal(item)">头像</button>
-              <button class="delete" @click="handleDelete(item.id)">删除</button>
             </div>
           </div>
         </div>
-        <!-- 列表视图 -->
-        <div v-else class="list-view">
-          <table>
-            <thead>
-              <tr>
-                <th>声纹名称</th>
-                <th>播放</th>
-                <th>创建时间</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in filteredVoiceprints" :key="item.id">
-                <td>
-                  <div class="voiceprint-name-cell">
-                    <div class="avatar-small-container">
-                      <img v-if="item.avatar_url" :src="API_BASE_URL + item.avatar_url" class="voiceprint-avatar-small" alt="声纹头像" @click.stop="showAvatarModal(item)" />
-                      <div v-else class="avatar-small-default" @click.stop="showAvatarModal(item)">👤</div>
-                    </div>
-                    <span class="name-text">{{ item.name }}</span>
-                  </div>
-                </td>
-                <td>
-                  <div class="play-control" @click="handleTogglePlay(item)">
-                    <span v-if="playingId !== item.id || isPaused" class="play-icon">▶️</span>
-                    <span v-else class="pause-icon">⏸️</span>
-                    <div v-if="playingId === item.id" class="sound-waves-small" :class="{ paused: isPaused }">
-                      <div class="wave"></div>
-                      <div class="wave"></div>
-                      <div class="wave"></div>
-                      <div class="wave"></div>
-                      <div class="wave"></div>
-                    </div>
-                    <span v-if="playingId === item.id" class="current-time">{{ formatTime(currentTime) }}</span>
-                  </div>
-                </td>
-                <td>{{ formatDate(item.created_at) }}</td>
-                <td class="actions">
-                  <button @click="handleRename(item)">重命名</button>
-                  <button class="delete" @click="handleDelete(item.id)">删除</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+      </div>
+
+      <!-- 右侧：选中 Speaker 的详情和声纹管理 -->
+      <div class="speaker-detail" v-if="selectedSpeaker">
+        <div class="detail-header">
+          <div class="detail-speaker-info">
+            <div class="detail-avatar">
+              <img v-if="selectedSpeaker.avatar_url" :src="API_BASE_URL + selectedSpeaker.avatar_url" class="detail-avatar-img" alt="说话人头像" />
+              <div v-else class="detail-avatar-default">👤</div>
+            </div>
+            <div>
+              <h2 class="detail-name">{{ selectedSpeaker.name }}</h2>
+              <span class="detail-meta"> {{ selectedSpeaker.voiceprints_count }} 条声纹</span>
+            </div>
+          </div>
+          <div class="detail-actions">
+            <button class="edit-btn" @click="showEditSpeakerModalHandler">✏️ 修改</button>
+            <button class="delete-btn" @click="handleDeleteSpeaker">🗑️ 删除</button>
+          </div>
+        </div>
+
+        <div class="voiceprints-section">
+          <div class="section-header">
+            <h3>声纹管理</h3>
+            <button class="add-voiceprint-btn" @click="showAddVoiceprintModal = true">➕ 追加声纹</button>
+          </div>
+          <div v-if="loadingVoiceprints" class="loading">加载中...</div>
+          <div v-else-if="selectedSpeaker.voiceprints.length === 0" class="empty">
+            该说话人暂无声纹，请先添加
+          </div>
+          <div v-else class="voiceprints-grid">
+            <div
+              v-for="vp in selectedSpeaker.voiceprints"
+              :key="vp.id"
+              class="voiceprint-card"
+              :class="{ playing: playingVoiceprint?.id === vp.id }"
+            >
+              <div class="voiceprint-preview" @click="handleTogglePlayVoiceprint(vp)">
+                <div v-if="playingVoiceprint?.id === vp.id" class="sound-waves">
+                  <div class="wave"></div>
+                  <div class="wave"></div>
+                  <div class="wave"></div>
+                  <div class="wave"></div>
+                  <div class="wave"></div>
+                </div>
+                <div v-else class="play-icon">▶️</div>
+              </div>
+              <div class="voiceprint-info">
+                <div class="source-type">
+                  <span :class="vp.source_type === 'manual' ? 'manual-tag' : 'auto-tag'">
+                    {{ vp.source_type === 'manual' ? '手动注册' : '会议自动' }}
+                  </span>
+                </div>
+                <div class="voiceprint-date">{{ formatDate(vp.created_at) }}</div>
+              </div>
+              <div class="voiceprint-actions">
+                <button class="update-btn" @click="showUpdateVoiceprintModalHandler(vp)">更新</button>
+                <button
+                  class="delete-vp-btn"
+                  :disabled="isFirstManualVoiceprint(vp)"
+                  @click="handleDeleteVoiceprint(vp)"
+                >
+                  删除
+                </button>
+              </div>
+              <div v-if="isFirstManualVoiceprint(vp)" class="first-voiceprint-badge">第一条声纹</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-else class="empty-detail">
+        <div class="empty-detail-content">
+          <span class="empty-icon">👤</span>
+          <p>请选择左侧的说话人查看详情</p>
         </div>
       </div>
     </div>
 
-    <!-- 添加声纹模态框 -->
+    <!-- 添加说话人模态框 -->
     <div v-if="showAddModal" class="modal-overlay" @click.self="showAddModal = false">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>添加声纹</h3>
+          <h3>添加说话人</h3>
           <button class="close-btn" @click="showAddModal = false">×</button>
         </div>
-        <div class="modal-body">
+        <div v-if="similarSpeaker" class="similar-warning">
+          <p>检测到和「{{ similarSpeaker.name }}」很相似！</p>
+          <p>是否强制创建？</p>
+          <div class="similar-actions">
+            <button class="cancel-btn" @click="showAddModal = false; resetSimilarWarning();">取消</button>
+            <button class="confirm-btn" @click="handleForceCreateSpeaker">强制创建</button>
+          </div>
+        </div>
+        <div v-else class="modal-body">
           <div class="form-group">
-            <label>声纹名称</label>
-            <input type="text" v-model="newVoiceprint.name" placeholder="请输入声纹名称" />
+            <label>说话人姓名</label>
+            <input type="text" v-model="newSpeaker.name" placeholder="请输入说话人姓名" />
           </div>
           <div class="form-group">
-            <label>上传音频文件</label>
+            <label>上传第一条声纹（可选）</label>
             <div class="file-upload">
-              <input
-                type="file"
-                ref="fileInput"
-                @change="handleFileSelect"
-                accept="audio/*"
-              />
-              <div class="file-placeholder" v-if="!selectedFile">
-                  <span class="icon">📁</span>
-                  <span>点击上传音频文件</span>
+              <input type="file" ref="addSpeakerFileInput" @change="handleAddSpeakerFileSelect" accept="audio/*" />
+              <div class="file-placeholder" v-if="!newSpeaker.file">
+                <span class="icon">📁</span>
+                <span>点击上传音频文件</span>
               </div>
               <div class="file-selected" v-else>
-                  <span class="icon">✅</span>
-                  <span>{{ selectedFile.name }}</span>
+                <span class="icon">✅</span>
+                <span>{{ newSpeaker.file.name }}</span>
               </div>
             </div>
           </div>
         </div>
-        <div class="modal-footer">
-          <button class="cancel-btn" @click="showAddModal = false">取消</button>
-          <button class="confirm-btn" @click="handleAddVoiceprint" :disabled="addLoading">
-            {{ addLoading ? '添加中...' : '添加' }}
+        <div v-if="!similarSpeaker" class="modal-footer">
+          <button class="cancel-btn" @click="showAddModal = false; resetSimilarWarning();">取消</button>
+          <button class="confirm-btn" @click="handleAddSpeaker" :disabled="addSpeakerLoading">
+            {{ addSpeakerLoading ? '添加中...' : '添加' }}
           </button>
         </div>
       </div>
     </div>
 
-    <!-- 重命名模态框 -->
-    <div v-if="showRenameModal" class="modal-overlay" @click.self="showRenameModal = false">
+    <!-- 修改说话人模态框 -->
+    <div v-if="showEditSpeakerModal" class="modal-overlay" @click.self="showEditSpeakerModal = false">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>重命名声纹</h3>
-          <button class="close-btn" @click="showRenameModal = false">×</button>
+          <h3>修改说话人</h3>
+          <button class="close-btn" @click="showEditSpeakerModal = false">×</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label>新名称</label>
-            <input type="text" v-model="renameVoiceprint.newName" placeholder="请输入新名称" />
+            <label>说话人姓名</label>
+            <input type="text" v-model="editingSpeaker.name" placeholder="请输入说话人姓名" />
+          </div>
+          <div class="form-group">
+            <label>上传头像（可选）</label>
+            <div class="file-upload">
+              <input type="file" ref="editSpeakerAvatarInput" @change="handleEditSpeakerAvatarSelect" accept="image/*" />
+              <div class="file-placeholder" v-if="!editingSpeaker.avatar">
+                <span class="icon">📁</span>
+                <span>点击上传图片文件</span>
+              </div>
+              <div class="file-selected" v-else>
+                <span class="icon">✅</span>
+                <span>{{ editingSpeaker.avatar.name }}</span>
+              </div>
+            </div>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="cancel-btn" @click="showRenameModal = false">取消</button>
-          <button class="confirm-btn" @click="handleConfirmRename">确认</button>
+          <button class="cancel-btn" @click="showEditSpeakerModal = false">取消</button>
+          <button class="confirm-btn" @click="handleEditSpeaker" :disabled="editSpeakerLoading">
+            {{ editSpeakerLoading ? '修改中...' : '修改' }}
+          </button>
         </div>
       </div>
     </div>
 
-    <!-- 头像管理模态框 -->
-    <div v-if="showAvatarModalVisible" class="modal-overlay" @click.self="showAvatarModalVisible = false">
+    <!-- 追加声纹模态框 -->
+    <div v-if="showAddVoiceprintModal" class="modal-overlay" @click.self="showAddVoiceprintModal = false">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>声纹头像管理 - {{ currentVoiceprint?.name }}</h3>
-          <button class="close-btn" @click="showAvatarModalVisible = false">×</button>
+          <h3>给「{{ selectedSpeaker?.name }}」追加声纹</h3>
+          <button class="close-btn" @click="showAddVoiceprintModal = false">×</button>
         </div>
         <div class="modal-body">
-            <div class="avatar-preview-area">
-              <!-- 预览顺序：新选图片 > 已有头像 > 默认 emoji -->
-              <img v-if="avatarPreviewUrl" :src="avatarPreviewUrl" class="avatar-large-preview" alt="头像预览" />
-              <img v-else-if="currentVoiceprint?.avatar_url" :src="API_BASE_URL + currentVoiceprint.avatar_url" class="avatar-large-preview" alt="声纹头像" />
-              <div v-else class="avatar-large-default">👤</div>
-            </div>
-          <div class="avatar-actions">
-            <div class="file-upload-area">
-              <input
-                type="file"
-                ref="avatarFileInput"
-                @change="handleAvatarFileSelect"
-                accept="image/*"
-                style="display: none;"
-              />
-              <button class="upload-avatar-btn" @click="$refs.avatarFileInput.click()">
+          <div class="form-group">
+            <label>上传音频文件</label>
+            <div class="file-upload">
+              <input type="file" ref="addVoiceprintFileInput" @change="handleAddVoiceprintFileSelect" accept="audio/*" />
+              <div class="file-placeholder" v-if="!newVoiceprint.file">
                 <span class="icon">📁</span>
-                <span>选择图片</span>
-              </button>
-              <div class="file-info" v-if="selectedAvatarFile">
+                <span>点击上传音频文件</span>
+              </div>
+              <div class="file-selected" v-else>
                 <span class="icon">✅</span>
-                <span>{{ selectedAvatarFile.name }}</span>
+                <span>{{ newVoiceprint.file.name }}</span>
               </div>
             </div>
-            <div class="avatar-action-buttons">
-              <button class="confirm-btn" @click="handleUploadAvatar" :disabled="avatarLoading">
-                {{ avatarLoading ? '上传中...' : '更换头像' }}
-              </button>
-              <button class="delete-avatar-btn" @click="handleDeleteAvatar" :disabled="!currentVoiceprint?.avatar_url">
-                删除头像
-              </button>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="cancel-btn" @click="showAddVoiceprintModal = false">取消</button>
+          <button class="confirm-btn" @click="handleAddVoiceprint" :disabled="addVoiceprintLoading">
+            {{ addVoiceprintLoading ? '追加中...' : '追加' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 更新声纹模态框 -->
+    <div v-if="showUpdateVoiceprintModal" class="modal-overlay" @click.self="showUpdateVoiceprintModal = false">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>更新声纹</h3>
+          <button class="close-btn" @click="showUpdateVoiceprintModal = false">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>上传新音频文件</label>
+            <div class="file-upload">
+              <input type="file" ref="updateVoiceprintFileInput" @change="handleUpdateVoiceprintFileSelect" accept="audio/*" />
+              <div class="file-placeholder" v-if="!updatingVoiceprint.file">
+                <span class="icon">📁</span>
+                <span>点击上传音频文件</span>
+              </div>
+              <div class="file-selected" v-else>
+                <span class="icon">✅</span>
+                <span>{{ updatingVoiceprint.file.name }}</span>
+              </div>
             </div>
           </div>
+        </div>
+        <div class="modal-footer">
+          <button class="cancel-btn" @click="showUpdateVoiceprintModal = false">取消</button>
+          <button class="confirm-btn" @click="handleUpdateVoiceprint" :disabled="updateVoiceprintLoading">
+            {{ updateVoiceprintLoading ? '更新中...' : '更新' }}
+          </button>
         </div>
       </div>
     </div>
@@ -228,232 +276,412 @@
 </template>
 
 <script>
-import { ref, onMounted, watch, onUnmounted, computed } from 'vue';
-import { voiceprintApi } from '../api/voiceprintApi';
+import { ref, onMounted, onUnmounted } from 'vue';
+import { speakerApi } from '../api/speakerApi';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 export default {
   name: 'VoiceprintView',
   setup() {
-    const viewMode = ref(localStorage.getItem('voiceprint_view_mode') || 'grid');
-    const voiceprints = ref([]);
+    const speakers = ref([]);
+    const selectedSpeaker = ref(null);
     const searchKeyword = ref('');
     const loading = ref(false);
+    const loadingVoiceprints = ref(false);
+
+    // 模态框显示控制
     const showAddModal = ref(false);
-    const showRenameModal = ref(false);
-    const addLoading = ref(false);
-    const newVoiceprint = ref({ name: '' });
-    const renameVoiceprint = ref({ id: null, newName: '' });
-    const selectedFile = ref(null);
-    const fileInput = ref(null);
-    const containerRef = ref(null);
-    const playingId = ref(null);
-    const isPaused = ref(false);
-    const currentTime = ref(0);
+    const showEditSpeakerModal = ref(false);
+    const showAddVoiceprintModal = ref(false);
+    const showUpdateVoiceprintModal = ref(false);
+
+    // 新建 Speaker 数据
+    const newSpeaker = ref({ name: '', file: null });
+    const addSpeakerLoading = ref(false);
+    const similarSpeaker = ref(null);
+    const pendingNewSpeaker = ref(null);
+
+    // 修改 Speaker 数据
+    const editingSpeaker = ref({ name: '', avatar: null });
+    const editSpeakerLoading = ref(false);
+
+    // 声纹数据
+    const newVoiceprint = ref({ file: null });
+    const updatingVoiceprint = ref({ id: null, file: null });
+    const addVoiceprintLoading = ref(false);
+    const updateVoiceprintLoading = ref(false);
+
+    // 播放相关
+    const playingVoiceprint = ref(null);
     const audioElement = ref(null);
-    const timeUpdateInterval = ref(null);
-    const isLoading = ref(false);
-    const showAvatarModalVisible = ref(false);
-    const currentVoiceprint = ref(null);
-    const selectedAvatarFile = ref(null);
-    const avatarFileInput = ref(null);
-    const avatarLoading = ref(false);
-    const avatarPreviewUrl = ref(null); // 新增：图片预览 URL
+    const containerRef = ref(null);
 
-    // 根据关键词筛选声纹
-    const filteredVoiceprints = computed(() => {
-      let filtered = voiceprints.value;
-      
-      // 按关键词搜索
-      if (searchKeyword.value.trim()) {
-        const keyword = searchKeyword.value.toLowerCase().trim();
-        filtered = filtered.filter(item => 
-          item.name.toLowerCase().includes(keyword)
-        );
-      }
-      
-      return filtered;
-    });
+    // DOM 引用
+    const addSpeakerFileInput = ref(null);
+    const editSpeakerAvatarInput = ref(null);
+    const addVoiceprintFileInput = ref(null);
+    const updateVoiceprintFileInput = ref(null);
 
-    const handleSearch = () => {
-      // 搜索逻辑已经在computed属性中实现，这里可以添加额外的逻辑
-      console.log('搜索关键词:', searchKeyword.value);
+    // 格式化日期
+    const formatDate = (dateStr) => {
+      if (!dateStr) return '';
+      const date = new Date(dateStr);
+      return date.toLocaleString('zh-CN');
     };
 
-    const loadVoiceprints = async () => {
+    // 加载 Speaker 列表
+    const loadSpeakers = async () => {
       loading.value = true;
       try {
-        const response = await voiceprintApi.getList();
-        console.log('声纹列表响应:', response);
+        console.log('[DEBUG] 开始获取 Speaker 列表...');
+        const response = await speakerApi.getList(searchKeyword.value.trim());
+        console.log('[DEBUG] Speaker API 完整返回结果:', response);
         
-        // 支持多种响应格式
-        if (response.voiceprints && Array.isArray(response.voiceprints)) {
-          voiceprints.value = response.voiceprints;
-        } else if (response.data?.voiceprints && Array.isArray(response.data.voiceprints)) {
-          voiceprints.value = response.data.voiceprints;
+        if (response?.speakers && Array.isArray(response.speakers)) {
+          speakers.value = response.speakers;
+        } else if (response?.data?.speakers && Array.isArray(response.data.speakers)) {
+          speakers.value = response.data.speakers;
         } else if (Array.isArray(response.data)) {
-          voiceprints.value = response.data;
+          speakers.value = response.data;
         } else if (Array.isArray(response)) {
-          voiceprints.value = response;
+          speakers.value = response;
         }
+        
+        console.log('[DEBUG] 最终 speakers.value 内容:', speakers.value);
       } catch (error) {
-        console.error('加载声纹列表失败:', error);
+        console.error('加载说话人列表失败:', error);
       } finally {
         loading.value = false;
       }
     };
 
-    const handleFileSelect = (e) => {
+    // 搜索处理
+    const handleSearch = async () => {
+      await loadSpeakers();
+    };
+
+    // 选择 Speaker
+    const handleSelectSpeaker = (sp) => {
+      selectedSpeaker.value = { ...sp };
+    };
+
+    // 判断是否是第一条 manual 声纹
+    const isFirstManualVoiceprint = (vp) => {
+      if (!selectedSpeaker.value || selectedSpeaker.value.voiceprints.length === 0) return false;
+      const manualVoiceprints = selectedSpeaker.value.voiceprints
+        .filter(v => v.source_type === 'manual')
+        .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      if (manualVoiceprints.length === 0) return false;
+      return manualVoiceprints[0].id === vp.id;
+    };
+
+    // 添加 Speaker
+    const handleAddSpeaker = async () => {
+      if (!newSpeaker.value.name) {
+        alert('请填写说话人姓名');
+        return;
+      }
+      addSpeakerLoading.value = true;
+      try {
+        const res = await speakerApi.add(newSpeaker.value.name, newSpeaker.value.file);
+        if (res.status === 'warning' && res.similar_speaker) {
+          similarSpeaker.value = res.similar_speaker;
+          pendingNewSpeaker.value = { name: newSpeaker.value.name, file: newSpeaker.value.file };
+        } else {
+          await loadSpeakers();
+          showAddModal.value = false;
+          resetSimilarWarning();
+          newSpeaker.value = { name: '', file: null };
+        }
+      } catch (error) {
+        console.error('添加说话人失败:', error);
+        alert('添加说话人失败');
+      } finally {
+        addSpeakerLoading.value = false;
+      }
+    };
+
+    // 强制创建 Speaker
+    const handleForceCreateSpeaker = async () => {
+      addSpeakerLoading.value = true;
+      try {
+        await speakerApi.add(pendingNewSpeaker.value.name, pendingNewSpeaker.value.file, true);
+        await loadSpeakers();
+        showAddModal.value = false;
+        resetSimilarWarning();
+        newSpeaker.value = { name: '', file: null };
+      } catch (error) {
+        console.error('强制创建说话人失败:', error);
+        alert('强制创建说话人失败');
+      } finally {
+        addSpeakerLoading.value = false;
+      }
+    };
+
+    // 重置相似警告
+    const resetSimilarWarning = () => {
+      similarSpeaker.value = null;
+      pendingNewSpeaker.value = null;
+    };
+
+    // 选择上传 Speaker 的第一个声纹
+    const handleAddSpeakerFileSelect = (e) => {
       const file = e.target.files[0];
       if (file) {
-        selectedFile.value = file;
+        newSpeaker.value.file = file;
+      }
+    };
+
+    // 选择修改 Speaker 的头像
+    const handleEditSpeakerAvatarSelect = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        editingSpeaker.value.avatar = file;
+      }
+    };
+
+    // 显示修改 Speaker 模态框
+    const showEditSpeakerModalHandler = () => {
+      editingSpeaker.value = { name: selectedSpeaker.value.name, avatar: null };
+      showEditSpeakerModal.value = true;
+    };
+
+    // 修改 Speaker
+    const handleEditSpeaker = async () => {
+      console.log('[DEBUG] 开始修改 Speaker...');
+      console.log('[DEBUG] editingSpeaker.value:', editingSpeaker.value);
+      console.log('[DEBUG] selectedSpeaker.value:', selectedSpeaker.value);
+      
+      if (!editingSpeaker.value.name) {
+        alert('请填写说话人姓名');
+        return;
+      }
+      editSpeakerLoading.value = true;
+      try {
+        const nameToSend = editingSpeaker.value.name !== selectedSpeaker.value.name ? editingSpeaker.value.name : null;
+        const avatarToSend = editingSpeaker.value.avatar;
+        
+        console.log('[DEBUG] 发送请求 nameToSend:', nameToSend);
+        console.log('[DEBUG] 发送请求 avatarToSend:', avatarToSend);
+        
+        const res = await speakerApi.update(
+          selectedSpeaker.value.id,
+          nameToSend,
+          avatarToSend
+        );
+        
+        console.log('[DEBUG] 修改 Speaker API 返回结果:', res);
+        
+        await loadSpeakers();
+        // 更新选中的 Speaker
+        const updated = speakers.value.find(sp => sp.id === selectedSpeaker.value.id);
+        if (updated) {
+          selectedSpeaker.value = { ...updated };
+        }
+        showEditSpeakerModal.value = false;
+      } catch (error) {
+        console.error('修改说话人失败:', error);
+        alert('修改说话人失败');
+      } finally {
+        editSpeakerLoading.value = false;
+      }
+    };
+
+    // 删除 Speaker
+    const handleDeleteSpeaker = async () => {
+      if (!confirm(`确定要删除说话人「${selectedSpeaker.value.name}」吗？这会同时删除该说话人的所有声纹！`)) {
+        return;
+      }
+      try {
+        await speakerApi.delete(selectedSpeaker.value.id);
+        await loadSpeakers();
+        selectedSpeaker.value = null;
+      } catch (error) {
+        console.error('删除说话人失败:', error);
+        alert('删除说话人失败');
+      }
+    };
+
+    // 追加声纹
+    const handleAddVoiceprintFileSelect = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        newVoiceprint.value.file = file;
       }
     };
 
     const handleAddVoiceprint = async () => {
-      if (!newVoiceprint.value.name || !selectedFile.value) {
-        alert('请填写声纹名称并选择文件');
+      if (!newVoiceprint.value.file) {
+        alert('请上传音频文件');
         return;
       }
-      addLoading.value = true;
+      addVoiceprintLoading.value = true;
       try {
-        await voiceprintApi.add(selectedFile.value, newVoiceprint.value.name);
-        await loadVoiceprints();
-        showAddModal.value = false;
-        newVoiceprint.value = { name: '' };
-        selectedFile.value = null;
-        if (fileInput.value) {
-          fileInput.value.value = '';
+        await speakerApi.addVoiceprint(selectedSpeaker.value.id, newVoiceprint.value.file);
+        await loadSpeakers();
+        const updated = speakers.value.find(sp => sp.id === selectedSpeaker.value.id);
+        if (updated) {
+          selectedSpeaker.value = { ...updated };
         }
+        showAddVoiceprintModal.value = false;
+        newVoiceprint.value = { file: null };
       } catch (error) {
-        console.error('添加声纹失败:', error);
-        alert('添加声纹失败');
+        console.error('追加声纹失败:', error);
+        alert('追加声纹失败');
       } finally {
-        addLoading.value = false;
+        addVoiceprintLoading.value = false;
       }
     };
 
-    const handleRename = (item) => {
-      renameVoiceprint.value = { id: item.id, newName: item.name };
-      showRenameModal.value = true;
+    // 更新声纹
+    const showUpdateVoiceprintModalHandler = (vp) => {
+      updatingVoiceprint.value = { id: vp.id, file: null };
+      showUpdateVoiceprintModal.value = true;
     };
 
-    const handleConfirmRename = async () => {
+    const handleUpdateVoiceprintFileSelect = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        updatingVoiceprint.value.file = file;
+      }
+    };
+
+    const handleUpdateVoiceprint = async () => {
+      console.log('[DEBUG] 开始更新声纹...');
+      console.log('[DEBUG] updatingVoiceprint.value:', updatingVoiceprint.value);
+      
+      if (!updatingVoiceprint.value.file) {
+        alert('请上传新的音频文件');
+        return;
+      }
+      updateVoiceprintLoading.value = true;
       try {
-        await voiceprintApi.rename(renameVoiceprint.value.id, renameVoiceprint.value.newName);
-        await loadVoiceprints();
-        showRenameModal.value = false;
+        const res = await speakerApi.updateVoiceprint(selectedSpeaker.value.id, updatingVoiceprint.value.id, updatingVoiceprint.value.file);
+        console.log('[DEBUG] 更新声纹 API 返回结果:', res);
+        
+        await loadSpeakers();
+        const updated = speakers.value.find(sp => sp.id === selectedSpeaker.value.id);
+        if (updated) {
+          selectedSpeaker.value = { ...updated };
+        }
+        showUpdateVoiceprintModal.value = false;
+        updatingVoiceprint.value = { id: null, file: null };
       } catch (error) {
-        console.error('重命名失败:', error);
-        alert('重命名失败');
+        console.error('更新声纹失败:', error);
+        alert('更新声纹失败');
+      } finally {
+        updateVoiceprintLoading.value = false;
       }
     };
 
-    const handleDelete = async (voiceprintId) => {
-      if (playingId.value === voiceprintId) {
-        stopPlayback();
+    // 删除声纹
+    const handleDeleteVoiceprint = async (vp) => {
+      console.log('[DEBUG] 开始删除声纹...');
+      console.log('[DEBUG] 要删除的声纹:', vp);
+      
+      if (isFirstManualVoiceprint(vp)) {
+        alert('这是该说话人第一条手动注册的声纹，不能删除！');
+        return;
       }
-      if (!confirm('确定要删除这个声纹吗？')) {
+      if (!confirm(`确定要删除这条声纹吗？`)) {
         return;
       }
       try {
-        await voiceprintApi.delete(voiceprintId);
-        await loadVoiceprints();
+        const res = await speakerApi.deleteVoiceprint(selectedSpeaker.value.id, vp.id);
+        console.log('[DEBUG] 删除声纹 API 返回结果:', res);
+        
+        await loadSpeakers();
+        const updated = speakers.value.find(sp => sp.id === selectedSpeaker.value.id);
+        if (updated) {
+          selectedSpeaker.value = { ...updated };
+        }
       } catch (error) {
         console.error('删除声纹失败:', error);
         alert('删除声纹失败');
       }
     };
 
-    const handleTogglePlay = (item) => {
-      // 防止重复点击导致多个音频同时播放
-      if (isLoading.value) {
-        return;
-      }
-      
-      // 如果点击的是当前正在播放的声纹
-      if (playingId.value === item.id) {
-        if (isPaused.value) {
-          // 暂停状态，继续播放
-          resumePlayback();
-        } else {
-          // 播放状态，暂停
-          pausePlayback();
-        }
-      } else {
-        // 点击的是其他声纹，停止当前播放，开始新的播放
+    // 播放/停止声纹音频
+    const handleTogglePlayVoiceprint = (vp) => {
+      if (playingVoiceprint.value?.id === vp.id) {
         stopPlayback();
-        startPlayback(item);
+      } else {
+        playVoiceprintAudio(vp);
       }
     };
 
-    const startPlayback = async (item) => {
-      // 立即设置播放状态，确保UI及时更新
-      playingId.value = item.id;
-      isPaused.value = false;
-      currentTime.value = 0;
-      
-      // 设置加载状态，防止重复点击
-      isLoading.value = true;
+    const playVoiceprintAudio = async (vp) => {
+      stopPlayback();
       
       try {
-        // 使用新的API获取音频文件
-        const response = await voiceprintApi.getAudio(item.id);
-        const blob = new Blob([response.data], { type: 'audio/wav' });
-        const url = URL.createObjectURL(blob);
+        console.log('[DEBUG] ============= 开始播放声纹 =============');
+        console.log('[DEBUG] 完整 vp 对象:', vp);
+        console.log('[DEBUG] vp.audio_url 值:', vp.audio_url);
         
-        // 创建新的音频元素
-        audioElement.value = new Audio(url);
+        // 🌟 优先使用 audio_url
+        let audioUrl = null;
+        if (vp.audio_url) {
+          audioUrl = API_BASE_URL + vp.audio_url;
+        }
         
-        // 监听播放结束
-        audioElement.value.addEventListener('ended', () => {
-          stopPlayback();
-        });
-
-        // 监听播放时间更新
-        timeUpdateInterval.value = setInterval(() => {
-          if (audioElement.value && !isPaused.value) {
-            currentTime.value = audioElement.value.currentTime;
+        console.log('[DEBUG] API_BASE_URL:', API_BASE_URL);
+        console.log('[DEBUG] 最终 audioUrl:', audioUrl);
+        
+        if (!audioUrl) {
+          alert('该声纹没有对应的音频文件');
+          return;
+        }
+        
+        // 先尝试用 fetch 测试一下这个 URL 是否能请求到
+        console.log('[DEBUG] 用 fetch 测试 URL 是否可访问...');
+        try {
+          const testResp = await fetch(audioUrl, { method: 'HEAD' });
+          console.log('[DEBUG] fetch HEAD 状态码:', testResp.status, testResp.statusText);
+          if (testResp.status === 404) {
+            console.error('[DEBUG] 文件不存在！404 错误！');
+            alert('音频文件不存在 (404)！请检查后端是否正确保存了文件！');
+            return;
           }
-        }, 100);
-
-        // 开始播放
-        await audioElement.value.play();
+        } catch (fetchErr) {
+          console.warn('[DEBUG] HEAD 请求失败，可能是跨域，继续尝试播放:', fetchErr);
+        }
+        
+        playingVoiceprint.value = vp;
+        audioElement.value = new Audio(audioUrl);
+        
+        audioElement.value.onerror = (e) => {
+          console.error('[DEBUG] 音频加载错误事件对象:', e);
+          console.error('[DEBUG] audioElement 错误:', audioElement.value.error);
+          alert('音频加载失败，请检查网络或文件是否存在');
+          stopPlayback();
+        };
+        
+        audioElement.value.onloadedmetadata = () => {
+          console.log('[DEBUG] 音频元数据加载成功！时长:', audioElement.value.duration);
+        };
+        
+        audioElement.value.onended = () => {
+          stopPlayback();
+        };
+        
+        console.log('[DEBUG] 开始调用 audioElement.play()...');
+        const playPromise = audioElement.value.play();
+        if (playPromise !== undefined) {
+          playPromise.then(_ => {
+            console.log('[DEBUG] 播放成功开始！');
+          })
+          .catch(error => {
+            console.error('[DEBUG] play() 抛出异常:', error);
+            alert('播放失败: ' + (error.message || '未知错误'));
+            stopPlayback();
+          });
+        }
       } catch (error) {
-        console.error('播放失败:', error);
-        alert('播放失败，请检查音频文件');
+        console.error('[DEBUG] 播放失败（外层 catch）:', error);
+        console.error('[DEBUG] 错误栈:', error.stack);
+        alert('播放失败: ' + (error.message || '未知错误'));
         stopPlayback();
-      } finally {
-        // 无论成功失败，都清除加载状态
-        isLoading.value = false;
-      }
-    };
-
-    // 点击空白处停止播放
-    const handleClickOutside = (event) => {
-      // 检查点击是否在声纹卡片或播放控制区域外
-      const isGridItem = event.target.closest('.grid-item');
-      const isPlayControl = event.target.closest('.play-control');
-      
-      if (!isGridItem && !isPlayControl) {
-        stopPlayback();
-      }
-    };
-
-    const pausePlayback = () => {
-      if (audioElement.value) {
-        audioElement.value.pause();
-        isPaused.value = true;
-      }
-    };
-
-    const resumePlayback = () => {
-      if (audioElement.value) {
-        audioElement.value.play().catch(error => {
-          console.error('继续播放失败:', error);
-        });
-        isPaused.value = false;
       }
     };
 
@@ -462,158 +690,64 @@ export default {
         audioElement.value.pause();
         audioElement.value = null;
       }
-      if (timeUpdateInterval.value) {
-        clearInterval(timeUpdateInterval.value);
-        timeUpdateInterval.value = null;
-      }
-      playingId.value = null;
-      isPaused.value = false;
-      currentTime.value = 0;
-      isLoading.value = false; // 清除加载状态
+      playingVoiceprint.value = null;
     };
-
-    // 头像相关方法
-    const showAvatarModal = (item) => {
-      currentVoiceprint.value = item;
-      selectedAvatarFile.value = null;
-      avatarPreviewUrl.value = null;
-      showAvatarModalVisible.value = true;
-    };
-
-    const handleAvatarFileSelect = (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        // 校验图片格式
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-        if (!allowedTypes.includes(file.type)) {
-          alert('仅支持 JPG、PNG、GIF、WebP 格式的图片');
-          return;
-        }
-        // 校验文件大小（5MB）
-        if (file.size > 5 * 1024 * 1024) {
-          alert('图片大小不能超过5MB');
-          return;
-        }
-        selectedAvatarFile.value = file;
-        // 创建预览 URL
-        avatarPreviewUrl.value = URL.createObjectURL(file);
-      }
-    };
-
-    const handleUploadAvatar = async () => {
-      if (!currentVoiceprint.value) return;
-      if (!selectedAvatarFile.value) {
-        alert('请选择图片文件');
-        return;
-      }
-      avatarLoading.value = true;
-      try {
-        const res = await voiceprintApi.uploadAvatar(currentVoiceprint.value.id, selectedAvatarFile.value);
-        // 更新 currentVoiceprint 的头像 URL
-        currentVoiceprint.value.avatar_url = res.avatar_url || res.data?.avatar_url;
-        await loadVoiceprints();
-        selectedAvatarFile.value = null;
-        avatarPreviewUrl.value = null; // 清除预览
-        if (avatarFileInput.value) {
-          avatarFileInput.value.value = '';
-        }
-        showAvatarModalVisible.value = false;
-      } catch (error) {
-        console.error('头像上传失败:', error);
-        alert('头像上传失败');
-      } finally {
-        avatarLoading.value = false;
-      }
-    };
-
-    const handleDeleteAvatar = async () => {
-      if (!currentVoiceprint.value) return;
-      if (!confirm('确定要删除这个声纹的头像吗？')) {
-        return;
-      }
-      try {
-        await voiceprintApi.deleteAvatar(currentVoiceprint.value.id);
-        // 清除 currentVoiceprint 的头像 URL
-        currentVoiceprint.value.avatar_url = null;
-        await loadVoiceprints();
-        avatarPreviewUrl.value = null;
-        showAvatarModalVisible.value = false;
-      } catch (error) {
-        console.error('头像删除失败:', error);
-        alert('头像删除失败');
-      }
-    };
-
-    const formatDate = (dateStr) => {
-      if (!dateStr) return '';
-      const date = new Date(dateStr);
-      return date.toLocaleString('zh-CN');
-    };
-
-    const formatTime = (seconds) => {
-      const mins = Math.floor(seconds / 60);
-      const secs = Math.floor(seconds % 60);
-      return `${mins}:${secs.toString().padStart(2, '0')}`;
-    };
-
-    // 监听视图模式变化，保存到localStorage
-    watch(viewMode, (newMode) => {
-      localStorage.setItem('voiceprint_view_mode', newMode);
-    });
-
-    // 组件卸载时停止播放
-    onUnmounted(() => {
-      stopPlayback();
-      // 移除点击事件监听器
-      document.removeEventListener('click', handleClickOutside);
-    });
 
     onMounted(() => {
-      loadVoiceprints();
-      // 添加点击事件监听器
-      document.addEventListener('click', handleClickOutside);
+      loadSpeakers();
+    });
+
+    onUnmounted(() => {
+      stopPlayback();
     });
 
     return {
-      viewMode,
-      voiceprints,
-      filteredVoiceprints,
+      API_BASE_URL,
+      speakers,
+      selectedSpeaker,
       searchKeyword,
       loading,
+      loadingVoiceprints,
       showAddModal,
-      showRenameModal,
-      addLoading,
+      showEditSpeakerModal,
+      showAddVoiceprintModal,
+      showUpdateVoiceprintModal,
+      newSpeaker,
+      addSpeakerLoading,
+      similarSpeaker,
+      editingSpeaker,
+      editSpeakerLoading,
       newVoiceprint,
-      renameVoiceprint,
-      selectedFile,
-      fileInput,
+      updatingVoiceprint,
+      addVoiceprintLoading,
+      updateVoiceprintLoading,
+      playingVoiceprint,
       containerRef,
-      playingId,
-      isPaused,
-      currentTime,
-      isLoading,
-      showAvatarModalVisible,
-      currentVoiceprint,
-      selectedAvatarFile,
-      avatarFileInput,
-      avatarLoading,
-      avatarPreviewUrl,
-      loadVoiceprints,
-      handleFileSelect,
-      handleAddVoiceprint,
-      handleRename,
-      handleConfirmRename,
-      handleDelete,
-      handleTogglePlay,
-      handleSearch,
-      handleClickOutside,
+      addSpeakerFileInput,
+      editSpeakerAvatarInput,
+      addVoiceprintFileInput,
+      updateVoiceprintFileInput,
       formatDate,
-      formatTime,
-      showAvatarModal,
-      handleAvatarFileSelect,
-      handleUploadAvatar,
-      handleDeleteAvatar,
-      API_BASE_URL
+      handleSearch,
+      handleSelectSpeaker,
+      isFirstManualVoiceprint,
+      handleAddSpeaker,
+      handleForceCreateSpeaker,
+      resetSimilarWarning,
+      handleAddSpeakerFileSelect,
+      handleEditSpeakerAvatarSelect,
+      showEditSpeakerModalHandler,
+      showEditSpeakerModal,
+      handleEditSpeaker,
+      handleDeleteSpeaker,
+      handleAddVoiceprintFileSelect,
+      handleAddVoiceprint,
+      showUpdateVoiceprintModalHandler,
+      showUpdateVoiceprintModal,
+      handleUpdateVoiceprintFileSelect,
+      handleUpdateVoiceprint,
+      handleDeleteVoiceprint,
+      handleTogglePlayVoiceprint
     };
   }
 };
@@ -651,26 +785,6 @@ export default {
 
 .section-tab.active {
   background: #409eff;
-  color: white;
-}
-
-.view-toggle {
-  display: flex;
-  gap: 8px;
-}
-
-.view-toggle button {
-  padding: 8px;
-  border: 1px solid #ddd;
-  background: white;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.view-toggle button.active {
-  background: #409eff;
-  border-color: #409eff;
   color: white;
 }
 
@@ -728,166 +842,273 @@ export default {
   background: #66b1ff;
 }
 
-.content-area {
+.main-content {
   flex: 1;
+  display: flex;
+  gap: 16px;
   padding: 16px;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
-.loading,
-.empty {
-  text-align: center;
-  padding: 48px;
-  color: #999;
-}
-
-.grid-view {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 24px;
-}
-
-.grid-item {
+.speakers-list {
+  width: 320px;
+  min-width: 320px;
   background: white;
   border: 1px solid #eee;
   border-radius: 12px;
-  overflow: hidden;
-  transition: all 0.3s;
-  cursor: pointer;
-  position: relative;
-}
-
-.grid-item:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-}
-
-.grid-item.playing-orange {
-  box-shadow: 0 4px 12px rgba(255, 140, 0, 0.4);
-  border-color: #ff8c00;
-}
-
-.grid-item.playing-orange .item-preview {
-  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
-}
-
-.grid-item.playing-green {
-  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
-  border-color: #4caf50;
-}
-
-.grid-item.playing-green .item-preview {
-  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
-}
-
-.item-preview {
-  height: 160px;
-  background: #f5f7fa;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  transition: all 0.3s;
-}
-
-.preview-icon {
-  font-size: 64px;
-  z-index: 1;
-}
-
-/* 头像样式 */
-.avatar-container {
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
 }
 
-.voiceprint-avatar {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid #eee;
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-
-.voiceprint-avatar:hover {
-  transform: scale(1.1);
-}
-
-.avatar-default {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: #f5f7fa;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 32px;
-  border: 2px solid #ddd;
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-
-.avatar-default:hover {
-  transform: scale(1.1);
-}
-
-/* 列表视图头像 */
-.voiceprint-name-cell {
+.speaker-item {
   display: flex;
   align-items: center;
   gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
-.avatar-small-container {
+.speaker-item:hover {
+  background: #f5f7fa;
+}
+
+.speaker-item.active {
+  background: #e8f4ff;
+  border-left: 3px solid #409eff;
+}
+
+.speaker-avatar {
+  width: 48px;
+  height: 48px;
   flex-shrink: 0;
 }
 
-.voiceprint-avatar-small {
-  width: 36px;
-  height: 36px;
+.speaker-avatar-img {
+  width: 100%;
+  height: 100%;
   border-radius: 50%;
   object-fit: cover;
-  border: 1px solid #eee;
-  cursor: pointer;
-  transition: transform 0.2s;
 }
 
-.voiceprint-avatar-small:hover {
-  transform: scale(1.1);
-}
-
-.avatar-small-default {
-  width: 36px;
-  height: 36px;
+.speaker-avatar-default {
+  width: 100%;
+  height: 100%;
   border-radius: 50%;
   background: #f5f7fa;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
-  border: 1px solid #ddd;
-  cursor: pointer;
-  transition: transform 0.2s;
+  font-size: 24px;
 }
 
-.avatar-small-default:hover {
-  transform: scale(1.1);
+.speaker-info {
+  flex: 1;
+  overflow: hidden;
 }
 
-.name-text {
+.speaker-name {
+  font-size: 14px;
   font-weight: 500;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.speaker-meta {
+  font-size: 12px;
+  color: #999;
+  display: flex;
+  gap: 8px;
+}
+
+.speaker-detail {
+  flex: 1;
+  background: white;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.empty-detail {
+  flex: 1;
+  background: white;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-detail-content {
+  text-align: center;
+  color: #999;
+}
+
+.empty-icon {
+  font-size: 64px;
+  display: block;
+  margin-bottom: 16px;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #eee;
+  margin-bottom: 24px;
+}
+
+.detail-speaker-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.detail-avatar {
+  width: 72px;
+  height: 72px;
+}
+
+.detail-avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.detail-avatar-default {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #f5f7fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+}
+
+.detail-name {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: #333;
+}
+
+.detail-meta {
+  font-size: 14px;
+  color: #999;
+}
+
+.detail-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-btn {
+  padding: 10px 16px;
+  border: 1px solid #ddd;
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-btn:hover {
+  border-color: #409eff;
+  color: #409eff;
+}
+
+.delete-btn {
+  padding: 10px 16px;
+  border: 1px solid #f56c6c;
+  background: white;
+  color: #f56c6c;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.delete-btn:hover {
+  background: #fef0f0;
+}
+
+.voiceprints-section {
+  margin-top: 24px;
+}
+
+.voiceprints-section .section-header {
+  border-bottom: none;
+  padding: 0;
+  margin-bottom: 20px;
+}
+
+.voiceprints-section .section-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.add-voiceprint-btn {
+  padding: 10px 16px;
+  background: #409eff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.add-voiceprint-btn:hover {
+  background: #66b1ff;
+}
+
+.voiceprints-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.voiceprint-card {
+  background: white;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  padding: 16px;
+  position: relative;
+  transition: all 0.2s;
+}
+
+.voiceprint-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.voiceprint-card.playing {
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
+  border-color: #409eff;
+}
+
+.voiceprint-preview {
+  height: 120px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+
+.play-icon {
+  font-size: 28px;
 }
 
 .sound-waves {
-  position: absolute;
-  bottom: 20px;
   display: flex;
   align-items: center;
   gap: 3px;
-  z-index: 2;
 }
 
 .sound-waves .wave {
@@ -895,11 +1116,6 @@ export default {
   background: #409eff;
   border-radius: 2px;
   animation: wave 0.5s ease-in-out infinite;
-}
-
-.sound-waves.paused .wave {
-  animation: none;
-  transform: scaleY(0.5);
 }
 
 .sound-waves .wave:nth-child(1) {
@@ -936,29 +1152,41 @@ export default {
   }
 }
 
-.item-info {
-  padding: 16px;
+.voiceprint-info {
+  margin-bottom: 12px;
 }
 
-.item-name {
-  font-size: 14px;
-  color: #333;
-  margin-bottom: 8px;
-  font-weight: 500;
+.source-type {
+  margin-bottom: 4px;
 }
 
-.item-meta {
+.manual-tag {
+  padding: 4px 8px;
+  background: #e8f4ff;
+  color: #409eff;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.auto-tag {
+  padding: 4px 8px;
+  background: #f0f9ff;
+  color: #096dd9;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.voiceprint-date {
   font-size: 12px;
   color: #999;
 }
 
-.item-actions {
-  padding: 0 16px 16px;
+.voiceprint-actions {
   display: flex;
   gap: 8px;
 }
 
-.item-actions button {
+.update-btn {
   flex: 1;
   padding: 8px;
   border: 1px solid #ddd;
@@ -969,160 +1197,53 @@ export default {
   transition: all 0.2s;
 }
 
-.item-actions button:hover {
+.update-btn:hover {
   border-color: #409eff;
   color: #409eff;
 }
 
-.item-actions button.delete {
-  border-color: #f56c6c;
-  color: #f56c6c;
-}
-
-.item-actions button.delete:hover {
-  background: #fef0f0;
-}
-
-.list-view table {
-  width: 100%;
-  border-collapse: collapse;
-  background: white;
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.list-view th,
-.list-view td {
-  padding: 16px;
-  text-align: left;
-  border-bottom: 1px solid #eee;
-}
-
-.list-view th {
-  background: #f5f7fa;
-  font-weight: 500;
-  color: #666;
-  font-size: 14px;
-}
-
-.list-view td {
-  font-size: 14px;
-  color: #333;
-}
-
-.list-view td .icon {
-  margin-right: 8px;
-}
-
-.play-control {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  padding: 5px 10px;
-  border-radius: 6px;
-  transition: background 0.2s;
-  min-height: 30px;
-  width: 200px;
-}
-
-.play-control:hover {
-  background: #f5f7fa;
-}
-
-.play-icon,
-.pause-icon {
-  font-size: 18px;
-}
-
-.sound-waves-small {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.sound-waves-small .wave {
-  width: 3px;
-  background: #409eff;
-  border-radius: 1px;
-  animation: waveSmall 0.5s ease-in-out infinite;
-}
-
-.sound-waves-small.paused .wave {
-  animation: none;
-  transform: scaleY(0.5);
-}
-
-.play-control .play-icon,
-.play-control .pause-icon {
-  cursor: pointer;
-  user-select: none;
-  pointer-events: none;
-}
-
-.sound-waves-small .wave:nth-child(1) {
-  height: 12px;
-  animation-delay: 0s;
-}
-
-.sound-waves-small .wave:nth-child(2) {
-  height: 16px;
-  animation-delay: 0.1s;
-}
-
-.sound-waves-small .wave:nth-child(3) {
-  height: 20px;
-  animation-delay: 0.2s;
-}
-
-.sound-waves-small .wave:nth-child(4) {
-  height: 16px;
-  animation-delay: 0.3s;
-}
-
-.sound-waves-small .wave:nth-child(5) {
-  height: 12px;
-  animation-delay: 0.4s;
-}
-
-@keyframes waveSmall {
-  0%, 100% {
-    transform: scaleY(0.5);
-  }
-  50% {
-    transform: scaleY(1);
-  }
-}
-
-.current-time {
-  font-size: 12px;
-  color: #666;
-  min-width: 40px;
-}
-
-.list-view .actions {
-  display: flex;
-  gap: 8px;
-}
-
-.list-view .actions button {
-  padding: 6px 12px;
+.delete-vp-btn {
+  flex: 1;
+  padding: 8px;
   border: 1px solid #ddd;
   background: white;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s;
-}
-
-.list-view .actions button:hover {
-  border-color: #409eff;
-  color: #409eff;
-}
-
-.list-view .actions button.delete {
-  border-color: #f56c6c;
   color: #f56c6c;
+  border-color: #f56c6c;
+}
+
+.delete-vp-btn:hover:not(:disabled) {
+  background: #fef0f0;
+}
+
+.delete-vp-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.first-voiceprint-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  padding: 4px 8px;
+  background: #f5a623;
+  color: white;
+  font-size: 10px;
+  border-radius: 12px;
+}
+
+.loading,
+.empty {
+  text-align: center;
+  padding: 48px;
+  color: #999;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .modal-overlay {
@@ -1165,6 +1286,23 @@ export default {
   font-size: 24px;
   cursor: pointer;
   color: #999;
+}
+
+.similar-warning {
+  padding: 24px;
+  text-align: center;
+}
+
+.similar-warning p {
+  margin: 0 0 20px;
+  font-size: 14px;
+  color: #333;
+}
+
+.similar-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
 }
 
 .modal-body {
@@ -1250,99 +1388,11 @@ export default {
   color: white;
 }
 
-.confirm-btn:hover {
+.confirm-btn:hover:not(:disabled) {
   background: #66b1ff;
 }
 
-/* 头像管理模态框样式 */
-.avatar-preview-area {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 24px;
-}
-
-.avatar-large-preview {
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 3px solid #eee;
-}
-
-.avatar-large-default {
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  background: #f5f7fa;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 60px;
-  border: 3px solid #ddd;
-}
-
-.avatar-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.file-upload-area {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
-.upload-avatar-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  background: #f5f7fa;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s;
-}
-
-.upload-avatar-btn:hover {
-  background: #e8f4ff;
-  border-color: #409eff;
-  color: #409eff;
-}
-
-.file-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #409eff;
-  font-size: 14px;
-}
-
-.avatar-action-buttons {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-}
-
-.delete-avatar-btn {
-  padding: 10px 24px;
-  border: 1px solid #f56c6c;
-  background: white;
-  color: #f56c6c;
-  border-radius: 6px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.delete-avatar-btn:hover:not(:disabled) {
-  background: #fef0f0;
-}
-
-.delete-avatar-btn:disabled {
+.confirm-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

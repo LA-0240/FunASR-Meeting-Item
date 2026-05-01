@@ -4,7 +4,7 @@ from django.utils.decorators import method_decorator
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.status import HTTP_200_OK, HTTP_400_BAD_REQUEST, HTTP_404_NOT_FOUND
-from ..models import UploadedFile, Transcription, Voiceprint
+from ..models import UploadedFile, Transcription, Voiceprint, Speaker
 from ..auth_utils import require_auth
 from .asr import ASRTranscribeView
 from .video import VideoASRTranscribeView
@@ -128,23 +128,23 @@ class TranscriptionGetView(APIView):
                     status=HTTP_404_NOT_FOUND
                 )
             
-            # 3. 为 speaker_info 添加头像信息（根据声纹表匹配）
+            # 3. 为 speaker_info 添加头像信息（根据 Speaker 表匹配）
             speaker_info = transcription.speaker_info or []
             # 为 raw_sentence_info 添加头像信息
             raw_sentence_info = transcription.raw_sentence_info or []
-            # 获取当前用户的所有声纹
-            voiceprints = {vp.name: vp for vp in Voiceprint.objects.filter(user=request.user)}
+            # 获取当前用户的所有 Speaker
+            speakers = {sp.name: sp for sp in Speaker.objects.filter(user=request.user)}
             
             # 为每条记录添加 avatar_url
             speaker_info_with_avatar = []
             for item in speaker_info:
-                speaker = item.get('speaker', '')
-                # 尝试匹配声纹头像
+                speaker_name = item.get('speaker', '') or item.get('spk', '')
+                # 尝试匹配 Speaker 头像
                 avatar_url = None
-                if speaker in voiceprints:
-                    vp = voiceprints[speaker]
-                    if vp.avatar:
-                        avatar_url = f"/media/{vp.avatar.name}"
+                if speaker_name in speakers:
+                    sp = speakers[speaker_name]
+                    if sp.avatar:
+                        avatar_url = f"/media/{sp.avatar.name}"
                 speaker_info_with_avatar.append({
                     **item,
                     'avatar_url': avatar_url
@@ -153,12 +153,12 @@ class TranscriptionGetView(APIView):
             # 为原始句子数据添加头像信息
             raw_sentence_info_with_avatar = []
             for item in raw_sentence_info:
-                speaker = item.get('speaker', '')
+                speaker_name = item.get('speaker', '') or item.get('spk', '')
                 avatar_url = None
-                if speaker in voiceprints:
-                    vp = voiceprints[speaker]
-                    if vp.avatar:
-                        avatar_url = f"/media/{vp.avatar.name}"
+                if speaker_name in speakers:
+                    sp = speakers[speaker_name]
+                    if sp.avatar:
+                        avatar_url = f"/media/{sp.avatar.name}"
                 raw_sentence_info_with_avatar.append({
                     **item,
                     'avatar_url': avatar_url
