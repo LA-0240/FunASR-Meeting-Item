@@ -64,31 +64,36 @@
                   </div>
                 </div>
                 <div class="item-info">
-                  <div class="item-name">{{ file.name }}</div>
-                  <div class="item-meta">
-                    <span>{{ formatDate(file.created_at) }}</span>
-                    <span>{{ formatFileSize(file.size) }}</span>
-                  </div>
-                </div>
+          <div class="item-name">{{ file.name }}</div>
+          <div class="item-meta">
+            <span>{{ formatDate(file.created_at) }}</span>
+            <span>{{ formatFileSize(file.size) }}</span>
+          </div>
+          <div v-if="file.meeting_type" class="item-tags">
+            <span class="tag">📌 {{ file.meeting_type }}</span>
+          </div>
+        </div>
               </div>
             </div>
             <!-- 列表视图 -->
             <div v-else class="list-view">
               <table>
                 <thead>
-                  <tr>
-                    <th>文件名称</th>
-                    <th>文件大小</th>
-                    <th>上传时间</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
+          <tr>
+            <th>文件名称</th>
+            <th>用户标签</th>
+            <th>文件大小</th>
+            <th>上传时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
                 <tbody>
                   <tr v-for="file in videoFiles" :key="file.id" @click="handleFileClick(file)">
                     <td>
                       <span class="file-icon">{{ getPreviewIcon(file.file_type) }}</span>
                       {{ file.name }}
                     </td>
+                    <td><span class="tag">📌 {{ file.meeting_type || '-' }}</span></td>
                     <td>{{ formatFileSize(file.size) }}</td>
                     <td>{{ formatDate(file.created_at) }}</td>
                     <td>
@@ -134,31 +139,36 @@
                   </div>
                 </div>
                 <div class="item-info">
-                  <div class="item-name">{{ file.name }}</div>
-                  <div class="item-meta">
-                    <span>{{ formatDate(file.created_at) }}</span>
-                    <span>{{ formatFileSize(file.size) }}</span>
-                  </div>
-                </div>
+          <div class="item-name">{{ file.name }}</div>
+          <div class="item-meta">
+            <span>{{ formatDate(file.created_at) }}</span>
+            <span>{{ formatFileSize(file.size) }}</span>
+          </div>
+          <div v-if="file.meeting_type" class="item-tags">
+            <span class="tag">📌 {{ file.meeting_type }}</span>
+          </div>
+        </div>
               </div>
             </div>
             <!-- 列表视图 -->
             <div v-else class="list-view">
               <table>
                 <thead>
-                  <tr>
-                    <th>文件名称</th>
-                    <th>文件大小</th>
-                    <th>上传时间</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
+          <tr>
+            <th>文件名称</th>
+            <th>用户标签</th>
+            <th>文件大小</th>
+            <th>上传时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
                 <tbody>
                   <tr v-for="file in audioFiles" :key="file.id" @click="handleFileClick(file)">
                     <td>
                       <span class="file-icon">{{ getPreviewIcon(file.file_type) }}</span>
                       {{ file.name }}
                     </td>
+                    <td><span class="tag">📌 {{ file.meeting_type || '-' }}</span></td>
                     <td>{{ formatFileSize(file.size) }}</td>
                     <td>{{ formatDate(file.created_at) }}</td>
                     <td>
@@ -209,6 +219,9 @@
                   <span>{{ formatDate(file.created_at) }}</span>
                   <span>{{ formatFileSize(file.size) }}</span>
                 </div>
+                <div v-if="file.meeting_type" class="item-tags">
+                  <span class="tag">📌 {{ file.meeting_type }}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -218,6 +231,7 @@
               <thead>
                 <tr>
                   <th>文件名称</th>
+                  <th>用户标签</th>
                   <th>文件大小</th>
                   <th>上传时间</th>
                   <th>操作</th>
@@ -229,6 +243,7 @@
                     <span class="file-icon">{{ getPreviewIcon(file.file_type) }}</span>
                     {{ file.name }}
                   </td>
+                  <td><span class="tag">📌 {{ file.meeting_type || '-' }}</span></td>
                   <td>{{ formatFileSize(file.size) }}</td>
                   <td>{{ formatDate(file.created_at) }}</td>
                   <td>
@@ -258,13 +273,17 @@
   <div v-if="showRenameModal" class="modal-overlay" @click.self="showRenameModal = false">
     <div class="modal-content">
       <div class="modal-header">
-        <h3>重命名文件</h3>
+        <h3>修改文件信息</h3>
         <button class="close-btn" @click="showRenameModal = false">×</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label>新名称</label>
+          <label>文件名称</label>
           <input type="text" v-model="renameFile.newName" placeholder="请输入新名称" />
+        </div>
+        <div class="form-group">
+          <label>用户标签</label>
+          <input type="text" v-model="renameFile.meeting_type" placeholder="请输入会议标签" />
         </div>
       </div>
       <div class="modal-footer">
@@ -407,7 +426,8 @@ export default {
           id: file.file_id || file.id,
           name: file.original_name || file.name,
           size: file.file_size || file.size,
-          created_at: file.upload_time || file.created_at
+          created_at: file.upload_time || file.created_at,
+          meeting_type: file.meeting_type || ''
         }));
         
         files.value = mappedFiles;
@@ -506,7 +526,7 @@ export default {
       try {
         // 逐个上传文件
         for (const file of selectedFiles.value) {
-          await fileApi.uploadTranscribe(file, uploadParams.meeting_type);
+          await fileApi.uploadTranscribe(file, uploadParams.value.meeting_type);
         }
         // 上传完成后刷新文件列表
         await loadFiles();
@@ -572,7 +592,8 @@ export default {
     const handleRename = (file) => {
       renameFile.value = {
         id: file.id,
-        newName: file.name
+        newName: file.name,
+        meeting_type: file.meeting_type || ''
       };
       showRenameModal.value = true;
       activeMenu.value = null;
@@ -581,18 +602,18 @@ export default {
     // 确认重命名
     const handleConfirmRename = async () => {
       try {
-        // 调用后端API进行重命名
-        console.log('重命名文件:', renameFile.value.id, renameFile.value.newName);
-        const response = await fileApi.rename(renameFile.value.id, renameFile.value.newName);
-        console.log('重命名响应:', response);
-        // 重命名成功后刷新文件列表
+        // 调用后端API进行重命名和修改标签
+        console.log('修改文件信息:', renameFile.value.id, renameFile.value.newName, renameFile.value.meeting_type);
+        const response = await fileApi.rename(renameFile.value.id, renameFile.value.newName, renameFile.value.meeting_type);
+        console.log('修改响应:', response);
+        // 修改成功后刷新文件列表
         console.log('开始刷新文件列表');
         await loadFiles();
         console.log('文件列表刷新完成');
         showRenameModal.value = false;
       } catch (error) {
-        console.error('重命名文件失败:', error);
-        alert('重命名文件失败，请重试');
+        console.error('修改文件信息失败:', error);
+        alert('修改文件信息失败，请重试');
       }
     };
 
@@ -976,6 +997,19 @@ export default {
   justify-content: space-between;
   font-size: 12px;
   color: #999;
+}
+
+.item-tags {
+  margin-top: 6px;
+}
+
+.tag {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #f0f9ff;
+  color: #409eff;
+  border-radius: 4px;
+  font-size: 12px;
 }
 
 .list-view {

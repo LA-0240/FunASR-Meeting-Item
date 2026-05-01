@@ -32,9 +32,9 @@ export const fileApi = {
     return api.get('/file/list', { params });
   },
 
-  // 文件重命名
-  rename: (fileId, newName) => {
-    return api.post('/file/rename', { file_id: fileId, new_name: newName });
+  // 文件重命名和修改标签
+  rename: (fileId, newName, meetingType) => {
+    return api.post('/file/rename', { file_id: fileId, new_name: newName, meeting_type: meetingType });
   },
 
   // 文件删除

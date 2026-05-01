@@ -57,9 +57,9 @@ class TranscriptionSearchView(APIView):
                     status=HTTP_404_NOT_FOUND
                 )
             
-            # 5. 解析逐字稿数据
-            speaker_info = transcription.speaker_info or []
-            if not speaker_info:
+            # 5. 解析逐字稿数据（兼容新旧字段）
+            segments = transcription.unified_segments
+            if not segments:
                 return Response(
                     {"status": "failed", "detail": "逐字稿内容为空"},
                     status=HTTP_400_BAD_REQUEST
@@ -67,7 +67,7 @@ class TranscriptionSearchView(APIView):
             
             # 6. 搜索关键词
             matches = []
-            for index, sentence in enumerate(speaker_info):
+            for index, sentence in enumerate(segments):
                 text = sentence.get("text", "")
                 if keyword in text:
                     # 生成高亮文本
@@ -128,16 +128,14 @@ class TranscriptionGetView(APIView):
                     status=HTTP_404_NOT_FOUND
                 )
             
-            # 3. 为 speaker_info 添加头像信息（根据 Speaker 表匹配）
-            speaker_info = transcription.speaker_info or []
-            # 为 raw_sentence_info 添加头像信息
-            raw_sentence_info = transcription.raw_sentence_info or []
+            # 3. 获取统一的分段数据（兼容新旧字段）
+            segments = transcription.unified_segments
             # 获取当前用户的所有 Speaker
             speakers = {sp.name: sp for sp in Speaker.objects.filter(user=request.user)}
             
             # 为每条记录添加 avatar_url
-            speaker_info_with_avatar = []
-            for item in speaker_info:
+            segments_with_avatar = []
+            for item in segments:
                 speaker_name = item.get('speaker', '') or item.get('spk', '')
                 # 尝试匹配 Speaker 头像
                 avatar_url = None
@@ -145,33 +143,20 @@ class TranscriptionGetView(APIView):
                     sp = speakers[speaker_name]
                     if sp.avatar:
                         avatar_url = f"/media/{sp.avatar.name}"
-                speaker_info_with_avatar.append({
+                segments_with_avatar.append({
                     **item,
                     'avatar_url': avatar_url
                 })
             
-            # 为原始句子数据添加头像信息
-            raw_sentence_info_with_avatar = []
-            for item in raw_sentence_info:
-                speaker_name = item.get('speaker', '') or item.get('spk', '')
-                avatar_url = None
-                if speaker_name in speakers:
-                    sp = speakers[speaker_name]
-                    if sp.avatar:
-                        avatar_url = f"/media/{sp.avatar.name}"
-                raw_sentence_info_with_avatar.append({
-                    **item,
-                    'avatar_url': avatar_url
-                })
-            
-            # 4. 准备返回数据
+            # 4. 准备返回数据（同时返回新旧字段，兼容前端）
             return Response({
                 "status": "success",
                 "file_id": file_id,
                 "file_name": file.original_name,
                 "transcription_text": transcription.transcription_text,
-                "speaker_info": speaker_info_with_avatar,
-                "raw_sentence_info": raw_sentence_info_with_avatar,  # 原始句子数据
+                "segments": segments_with_avatar,  # 新统一字段
+                "speaker_info": segments_with_avatar,  # 兼容旧前端
+                "raw_sentence_info": segments_with_avatar,  # 兼容旧前端
                 "created_at": transcription.created_at.isoformat(),
                 "updated_at": transcription.updated_at.isoformat()
             }, status=HTTP_200_OK)
@@ -221,51 +206,53 @@ class TranscriptionEditView(APIView):
                     status=HTTP_404_NOT_FOUND
                 )
             
-            # 5. 解析逐字稿数据
-            speaker_info = transcription.speaker_info or []
-            if not speaker_info:
+            # 5. 解析逐字稿数据（兼容新旧字段）
+            segments = transcription.unified_segments
+            if not segments:
                 return Response(
                     {"status": "failed", "detail": "逐字稿内容为空"},
                     status=HTTP_400_BAD_REQUEST
                 )
             
             # 6. 验证句子索引
-            if sentence_index < 0 or sentence_index >= len(speaker_info):
+            if sentence_index < 0 or sentence_index >= len(segments):
                 return Response(
                     {"status": "failed", "detail": "句子索引无效"},
                     status=HTTP_400_BAD_REQUEST
                 )
             
             # 7. 修改句子
-            original_sentence = speaker_info[sentence_index].copy()
+            original_sentence = segments[sentence_index].copy()
             
             # 修改文本（只修改当前句子）
             if text:
-                speaker_info[sentence_index]["text"] = text
+                segments[sentence_index]["text"] = text
             
             # 修改说话人（批量修改所有相同说话人的句子）
             if speaker:
                 original_speaker = original_sentence.get("speaker", "")
                 if original_speaker:
                     updated_count = 0
-                    for i, item in enumerate(speaker_info):
+                    for i, item in enumerate(segments):
                         if item.get("speaker") == original_speaker:
-                            speaker_info[i]["speaker"] = speaker
+                            segments[i]["speaker"] = speaker
                             updated_count += 1
                     # 记录更新数量
                     batch_updated = updated_count
                 else:
                     # 如果原始说话人为空，只更新当前句子
-                    speaker_info[sentence_index]["speaker"] = speaker
+                    segments[sentence_index]["speaker"] = speaker
                     batch_updated = 1
             else:
                 batch_updated = 0
             
             # 8. 重新生成转录文本
-            transcription_text = '\n'.join([f"{item.get('speaker', '未知说话人')}: {item.get('text', '')}" for item in speaker_info])
+            transcription_text = '\n'.join([f"{item.get('speaker', '未知说话人')}: {item.get('text', '')}" for item in segments])
             
-            # 9. 保存修改
-            transcription.speaker_info = speaker_info
+            # 9. 保存修改（同时更新所有字段，保持兼容）
+            transcription.segments = segments
+            transcription.speaker_info = segments
+            transcription.raw_sentence_info = segments
             transcription.transcription_text = transcription_text
             transcription.save()
             
@@ -275,8 +262,9 @@ class TranscriptionEditView(APIView):
                 "file_id": file_id,
                 "sentence_index": sentence_index,
                 "original_sentence": original_sentence,
-                "updated_sentence": speaker_info[sentence_index],
-                "transcription": speaker_info
+                "updated_sentence": segments[sentence_index],
+                "segments": segments,  # 新字段
+                "transcription": segments  # 兼容旧字段
             }
             
             # 如果修改了说话人，返回批量更新信息
@@ -411,8 +399,7 @@ class TranscriptionGenerateView(APIView):
                 mock_file = InMemoryUploadedFile(
                     io.BytesIO(file_content),
                     None,
-                    file_name,
-                    content_type,
+                    file_name,                    content_type,
                     file_size,
                     None
                 )
@@ -437,52 +424,44 @@ class TranscriptionGenerateView(APIView):
                     status=HTTP_400_BAD_REQUEST
                 )
             
-            # 8. 提取转录结果
+            # 8. 提取转录结果（使用新的segments字段）
             transcription_data = asr_response.data
-            transcription_list = transcription_data.get('transcription', [])
-            original_sentence_info = transcription_data.get('sentence_info', [])  # 原始句子数据
+            segments = transcription_data.get('segments', transcription_data.get('transcription', []))
             
-            # 9. 格式化转录数据（已匹配声纹）
-            speaker_info = []
-            for item in transcription_list:
-                speaker_info.append({
-                    'speaker': item.get('spk', '未知说话人'),
+            # 9. 格式化统一的segments
+            unified_segments = []
+            for item in segments:
+                # 兼容两种格式：spk 或 speaker
+                speaker_name = item.get('spk', item.get('speaker', '未知说话人'))
+                unified_segments.append({
+                    'speaker': speaker_name,
+                    'avatar_url': item.get('avatar_url'),
                     'text': item.get('text', ''),
                     'start_time': item.get('start_time', 0),
                     'end_time': item.get('end_time', 0),
                     'original_spk': item.get('original_spk', '')
                 })
             
-            # 10. 格式化原始句子数据
-            raw_sentence_info = []
-            if original_sentence_info:
-                for item in original_sentence_info:
-                    raw_sentence_info.append({
-                        'speaker': item.get('spk') or item.get('sp', '未知说话人'),
-                        'text': item.get('text', ''),
-                        'start_time': round(item.get('start', 0) / 1000, 2),
-                        'end_time': round(item.get('end', 0) / 1000, 2),
-                        'original_spk': item.get('spk') or item.get('sp', 0)
-                    })
+            # 10. 生成转录文本
+            transcription_text = '\n'.join([f"{item['speaker']}: {item['text']}" for item in unified_segments])
             
-            # 11. 生成转录文本
-            transcription_text = '\n'.join([f"{item.get('spk', '未知说话人')}: {item.get('text', '')}" for item in transcription_list])
-            
-            # 12. 保存或更新逐字稿
+            # 11. 保存或更新逐字稿（同时更新新旧字段，保持兼容）
             try:
                 # 如果已存在，更新
                 transcription = Transcription.objects.get(file=file)
                 transcription.transcription_text = transcription_text
-                transcription.speaker_info = speaker_info
-                transcription.raw_sentence_info = raw_sentence_info if raw_sentence_info else speaker_info
+                transcription.segments = unified_segments
+                transcription.speaker_info = unified_segments
+                transcription.raw_sentence_info = unified_segments
                 transcription.save()
             except Transcription.DoesNotExist:
                 # 如果不存在，创建新的
                 transcription = Transcription(
                     file=file,
                     transcription_text=transcription_text,
-                    speaker_info=speaker_info,
-                    raw_sentence_info=raw_sentence_info if raw_sentence_info else speaker_info
+                    segments=unified_segments,
+                    speaker_info=unified_segments,
+                    raw_sentence_info=unified_segments
                 )
                 transcription.save()
             
@@ -498,7 +477,8 @@ class TranscriptionGenerateView(APIView):
                 "file_name": file.original_name,
                 "file_type": file.file_type,
                 "transcription_id": transcription.id,
-                "transcription": transcription_list,
+                "segments": unified_segments,  # 新字段
+                "transcription": unified_segments,  # 兼容旧前端
                 "speaker_stats": transcription_data.get('speaker_stats', {})
             }, status=HTTP_200_OK)
         
@@ -508,3 +488,4 @@ class TranscriptionGenerateView(APIView):
                 {"status": "failed", "detail": f"生成逐字稿失败：{str(e)}"},
                 status=HTTP_400_BAD_REQUEST
             )
+

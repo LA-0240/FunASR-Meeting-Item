@@ -2924,12 +2924,14 @@ export default {
   gap: 20px;
   padding: 20px;
   background: #f9fafc;
+  overflow-y: auto; /* 允许滚动 */
 }
 
 .player-container {
   background: black;
   border-radius: 12px;
   overflow: hidden;
+  flex-shrink: 0; /* 防止被压缩 */
 }
 
 .player-container.audio-container {

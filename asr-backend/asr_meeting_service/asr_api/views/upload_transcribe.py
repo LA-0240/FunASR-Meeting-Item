@@ -166,10 +166,10 @@ class FileUploadTranscribeView(APIView):
                 "file_type": uploaded_file.file_type,
                 "file_size": uploaded_file.file_size,
                 "upload_time": uploaded_file.upload_time.isoformat(),
-                "status": uploaded_file.status,
                 "meeting_type": uploaded_file.meeting_type,
                 "transcription_id": transcription.id,
-                "transcription": transcription_list,
+                "segments": unified_segments,  # 新字段
+                "transcription": unified_segments,  # 兼容旧字段
                 "speaker_stats": transcription_data.get('speaker_stats', {})
             }, status=HTTP_200_OK)
         
