@@ -292,12 +292,12 @@
             <div v-if="loadingTranscription" class="loading">加载中...</div>
             <div v-else-if="transcriptionError" class="error">{{ transcriptionError }}</div>
             <div v-else class="transcript-list">
-              <div v-if="transcriptionData.speaker_info?.length === 0" class="empty-state">
+              <div v-if="unifiedTranscription.length === 0" class="empty-state">
                 <p>暂无逐字稿数据</p>
                 <button class="generate-btn" @click="generateTranscription">生成逐字稿</button>
               </div>
               <div 
-                v-for="(item, index) in transcriptionData.speaker_info" 
+                v-for="(item, index) in unifiedTranscription" 
                 :key="index" 
                 class="transcript-item"
                 :class="{ 
@@ -371,12 +371,13 @@
       <!-- 右侧内容区域 -->
       <div class="right-panel">
         <!-- 视频/音频播放器 -->
-        <div class="player-container" :class="{ 'audio-container': !isVideoFile }">
+        <div class="player-container" ref="playerContainerRef" :class="{ 'audio-container': !isVideoFile, 'is-fullscreen': isFullScreen }">
           <video 
             v-if="isVideoFile"
             ref="mediaPlayerRef"
             class="media-player"
             controls
+            controlslist="nofullscreen"
             :src="fileUrl"
             @loadedmetadata="handleLoadedMetadata"
             @error="console.error('❌ [视频加载失败]', $event)"
@@ -394,17 +395,23 @@
           >
             您的浏览器不支持音频播放
           </audio>
-        </div>
-        
-        <!-- 字幕显示区域（仅视频显示） -->
-        <div v-if="isVideoFile && currentSubtitle" class="subtitle-container">
-          <div class="subtitle-avatar">
-            <img v-if="currentSubtitle.avatar_url" :src="API_BASE_URL + currentSubtitle.avatar_url" class="subtitle-avatar-img" alt="头像" />
-            <div v-else class="subtitle-avatar-default">👤</div>
-          </div>
-          <div class="subtitle-content">
-            <div class="subtitle-speaker">{{ currentSubtitle.speaker || '未知说话人' }}</div>
-            <div class="subtitle-text">{{ currentSubtitle.text }}</div>
+          
+          <!-- 自定义全屏按钮（仅视频显示） -->
+          <button v-if="isVideoFile" class="custom-fullscreen-btn" @click="toggleFullScreen" title="全屏">
+            <span v-if="isFullScreen">✕</span>
+            <span v-else>⛶</span>
+          </button>
+          
+          <!-- 字幕显示区域（仅视频显示） -->
+          <div v-if="isVideoFile && currentSubtitle" class="subtitle-container" :class="{ 'subtitle-fullscreen': isFullScreen }">
+            <div class="subtitle-avatar">
+              <img v-if="currentSubtitle.avatar_url" :src="API_BASE_URL + currentSubtitle.avatar_url" class="subtitle-avatar-img" alt="头像" />
+              <div v-else class="subtitle-avatar-default">👤</div>
+            </div>
+            <div class="subtitle-content">
+              <div class="subtitle-speaker">{{ currentSubtitle.speaker || '未知说话人' }}</div>
+              <div class="subtitle-text">{{ currentSubtitle.text }}</div>
+            </div>
           </div>
         </div>
 
@@ -735,7 +742,18 @@ export default {
     const summaryData = ref({ meeting_summary: '' });
     const abstractData = ref({ meeting_abstract: '' });
     const segmentsData = ref({ segments: [] });
-    const transcriptionData = ref({ speaker_info: [] });
+    const transcriptionData = ref({ segments: [], speaker_info: [] });
+    
+    // 计算属性：获取统一的逐字稿数据（优先新字段，兼容旧字段）
+    const unifiedTranscription = computed(() => {
+      if (transcriptionData.value.segments?.length > 0) {
+        return transcriptionData.value.segments;
+      }
+      if (transcriptionData.value.speaker_info?.length > 0) {
+        return transcriptionData.value.speaker_info;
+      }
+      return [];
+    });
 
     // 编辑状态
     const isEditingSummary = ref(false);
@@ -798,6 +816,78 @@ export default {
     
     // 当前字幕
     const currentSubtitle = ref(null);
+    const isFullScreen = ref(false);
+    const playerContainerRef = ref(null);
+    
+    // 全屏状态监听
+    const handleFullScreenChange = () => {
+      const fsElement = document.fullscreenElement || 
+                        document.webkitFullscreenElement || 
+                        document.mozFullScreenElement || 
+                        document.msFullscreenElement;
+      isFullScreen.value = !!fsElement;
+      console.log('📺 全屏状态变化:', isFullScreen.value, '全屏元素:', fsElement);
+      
+      // 检测是否是视频元素直接进入全屏，如果是，我们也需要处理
+      if (fsElement && mediaPlayerRef.value && fsElement === mediaPlayerRef.value) {
+        console.log('📺 视频元素直接进入全屏');
+        // 这里我们已经有了is-fullscreen类，CSS会处理显示
+      }
+    };
+    
+    // 切换全屏（全屏整个容器）
+    const toggleFullScreen = () => {
+      console.log('📺 切换全屏按钮被点击');
+      if (!playerContainerRef.value) {
+        console.error('❌ 播放器容器引用不存在');
+        return;
+      }
+      
+      if (!document.fullscreenElement && 
+          !document.webkitFullscreenElement && 
+          !document.mozFullScreenElement && 
+          !document.msFullscreenElement) {
+        // 进入全屏
+        console.log('📺 进入全屏模式');
+        if (playerContainerRef.value.requestFullscreen) {
+          playerContainerRef.value.requestFullscreen().catch(err => {
+            console.error('❌ 全屏请求失败:', err);
+          });
+        } else if (playerContainerRef.value.webkitRequestFullscreen) {
+          playerContainerRef.value.webkitRequestFullscreen().catch(err => {
+            console.error('❌ WebKit全屏请求失败:', err);
+          });
+        } else if (playerContainerRef.value.mozRequestFullScreen) {
+          playerContainerRef.value.mozRequestFullScreen().catch(err => {
+            console.error('❌ Mozilla全屏请求失败:', err);
+          });
+        } else if (playerContainerRef.value.msRequestFullscreen) {
+          playerContainerRef.value.msRequestFullscreen().catch(err => {
+            console.error('❌ IE全屏请求失败:', err);
+          });
+        }
+      } else {
+        // 退出全屏
+        console.log('📺 退出全屏模式');
+        if (document.exitFullscreen) {
+          document.exitFullscreen().catch(err => {
+            console.error('❌ 退出全屏失败:', err);
+          });
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen().catch(err => {
+            console.error('❌ WebKit退出全屏失败:', err);
+          });
+        } else if (document.mozCancelFullScreen) {
+          document.mozCancelFullScreen().catch(err => {
+            console.error('❌ Mozilla退出全屏失败:', err);
+          });
+        } else if (document.msExitFullscreen) {
+          document.msExitFullscreen().catch(err => {
+            console.error('❌ IE退出全屏失败:', err);
+          });
+        }
+      }
+    };
     
     // 用户交互控制
     const lastUserActivity = ref(Date.now());
@@ -852,9 +942,9 @@ export default {
 
     // 说话人数（去重）
     const speakerCount = computed(() => {
-      if (!transcriptionData.value.speaker_info?.length) return 0;
+      if (!unifiedTranscription.length) return 0;
       const speakers = new Set();
-      transcriptionData.value.speaker_info.forEach(item => {
+      unifiedTranscription.forEach(item => {
         if (item.speaker) {
           speakers.add(item.speaker);
         }
@@ -862,14 +952,9 @@ export default {
       return speakers.size;
     });
 
-    // 总句子数（使用原始句子数据）
+    // 总句子数
     const totalSentences = computed(() => {
-      // 优先使用原始句子数据长度
-      if (transcriptionData.value.raw_sentence_info) {
-        return transcriptionData.value.raw_sentence_info.length;
-      }
-      // 兼容旧数据：使用 speaker_info 长度
-      return transcriptionData.value.speaker_info?.length || 0;
+      return unifiedTranscription.length || 0;
     });
 
     // 格式化会议纪要内容（Markdown 渲染）
@@ -960,7 +1045,11 @@ export default {
       try {
         const response = await meetingApi.getTranscription(file.value.id);
         if (response.status === 'success') {
-          transcriptionData.value = response;
+          transcriptionData.value = {
+            segments: response.segments || [],
+            speaker_info: response.speaker_info || [],
+            raw_sentence_info: response.raw_sentence_info || []
+          };
         }
       } catch (error) {
         transcriptionError.value = '加载逐字稿失败';
@@ -1429,7 +1518,9 @@ export default {
         }
       } catch (error) {
         console.error('❌ [搜索] 搜索失败:', error);
-        alert('搜索失败');
+        showResultModal.value = true;
+        resultType.value = 'error';
+        resultMessage.value = error.response?.data?.detail || error.message || '搜索失败，请稍后重试';
       } finally {
         loadingSearch.value = false;
       }
@@ -1508,46 +1599,51 @@ export default {
       const result = searchResults.value[index];
       console.log('📍 [导航] 当前搜索结果:', result);
       
-      // 尝试多种匹配方式
-      let transcriptIndex = transcriptionData.value.speaker_info.findIndex(
-        item => item.sentence_index === result.sentence_index
-      );
+      // 首先尝试使用sentence_index匹配
+      let transcriptIndex = result.sentence_index;
+      console.log('📍 [导航] 使用sentence_index:', transcriptIndex);
       
-      if (transcriptIndex === -1) {
-        console.log('📍 [导航] sentence_index匹配失败，尝试id匹配');
-        transcriptIndex = transcriptionData.value.speaker_info.findIndex(
-          item => item.id === result.id
-        );
-      }
-      
-      if (transcriptIndex === -1) {
-        console.log('📍 [导航] id匹配失败，尝试text匹配');
-        transcriptIndex = transcriptionData.value.speaker_info.findIndex(
+      // 验证索引是否有效
+      if (transcriptIndex < 0 || transcriptIndex >= unifiedTranscription.value.length) {
+        console.log('📍 [导航] sentence_index无效，尝试其他匹配方式');
+        
+        // 尝试text匹配
+        transcriptIndex = unifiedTranscription.findIndex(
           item => item.text === result.text
         );
-      }
-      
-      if (transcriptIndex === -1) {
-        console.log('📍 [导航] text匹配失败，尝试speaker+start_time匹配');
-        transcriptIndex = transcriptionData.value.speaker_info.findIndex(
-          item => item.speaker === result.speaker && 
-                  Math.abs(item.start_time - result.start_time) < 0.1
-        );
+        
+        if (transcriptIndex === -1) {
+          console.log('📍 [导航] text匹配失败，尝试speaker+start_time匹配');
+          transcriptIndex = unifiedTranscription.findIndex(
+            item => item.speaker === result.speaker && 
+                    Math.abs(item.start_time - result.start_time) < 0.1
+          );
+        }
       }
       
       console.log('📍 [导航] 最终找到的逐字稿索引:', transcriptIndex);
       
-      if (transcriptIndex !== -1) {
-        // 滚动到该位置
-        const transcriptItem = document.querySelectorAll('.transcript-item')[transcriptIndex];
-        console.log('📍 [导航] 找到的DOM元素:', transcriptItem);
+      if (transcriptIndex !== -1 && transcriptIndex >= 0 && transcriptIndex < unifiedTranscription.value.length) {
+        // 高亮显示该项目
+        highlightedTranscriptIndex.value = transcriptIndex;
+        console.log('📍 [导航] 设置高亮索引:', transcriptIndex);
         
-        if (transcriptItem) {
-          transcriptItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          console.log('📍 [导航] 执行滚动');
-          // 高亮显示该项目
-          highlightedTranscriptIndex.value = transcriptIndex;
-          console.log('📍 [导航] 设置高亮索引:', transcriptIndex);
+        // 等待DOM更新后滚动
+        nextTick(() => {
+          // 滚动到该位置
+          const transcriptItem = document.querySelectorAll('.transcript-item')[transcriptIndex];
+          console.log('📍 [导航] 找到的DOM元素:', transcriptItem);
+          
+          if (transcriptItem) {
+            transcriptItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            console.log('📍 [导航] 执行滚动');
+          }
+        });
+        
+        // 跳转到视频播放位置
+        if (mediaPlayerRef.value) {
+          mediaPlayerRef.value.currentTime = result.start_time;
+          console.log('📍 [导航] 跳转到视频时间:', result.start_time);
         }
       } else {
         console.log('⚠️ [导航] 所有匹配方式都失败，无法找到对应的逐字稿项');
@@ -1666,7 +1762,8 @@ export default {
           editingSpeaker.value
         );
         if (response.status === 'success') {
-          transcriptionData.value.speaker_info = response.transcription;
+          // 优先使用新字段
+          transcriptionData.value.segments = response.segments || response.transcription;
           cancelTextEdit();
         }
       } catch (error) {
@@ -1754,15 +1851,15 @@ export default {
     // 导出逐字稿
     const exportTranscriptToWord = async () => {
       try {
-        const speakerInfo = transcriptionData.value.speaker_info || [];
-        if (!speakerInfo.length) {
+        const data = unifiedTranscription;
+        if (!data.length) {
           alert('逐字稿内容为空，无法导出');
           return;
         }
         
         // 格式化逐字稿内容
         let content = '';
-        speakerInfo.forEach((item, index) => {
+        data.forEach((item, index) => {
           const speaker = item.speaker || '未知说话人';
           const text = item.text || '';
           const startTime = item.start_time ? formatTime(item.start_time) : '';
@@ -2004,10 +2101,10 @@ export default {
       }
       
       // 找到当前播放时间对应的逐字稿项
-      const speakerInfo = transcriptionData.value.speaker_info || [];
+      const data = unifiedTranscription.value;
       let activeTranscriptIndex = -1;
-      for (let i = speakerInfo.length - 1; i >= 0; i--) {
-        const item = speakerInfo[i];
+      for (let i = data.length - 1; i >= 0; i--) {
+        const item = data[i];
         if (currentTime >= item.start_time) {
           activeTranscriptIndex = i;
           break;
@@ -2020,9 +2117,16 @@ export default {
       }
       
       // 更新字幕
-      if (activeTranscriptIndex !== -1 && speakerInfo[activeTranscriptIndex]) {
-        currentSubtitle.value = speakerInfo[activeTranscriptIndex];
+      const oldSubtitle = currentSubtitle.value;
+      if (activeTranscriptIndex !== -1 && data[activeTranscriptIndex]) {
+        currentSubtitle.value = data[activeTranscriptIndex];
+        if (oldSubtitle !== currentSubtitle.value) {
+          console.log('🎬 字幕更新:', currentSubtitle.value);
+        }
       } else {
+        if (currentSubtitle.value) {
+          console.log('🎬 清除字幕');
+        }
         currentSubtitle.value = null;
       }
       
@@ -2062,6 +2166,12 @@ export default {
       console.log('🚀 [页面加载] MeetingDetailView 已挂载');
       console.log('📍 [路由参数] route.params:', route.params);
       
+      // 监听全屏事件
+      document.addEventListener('fullscreenchange', handleFullScreenChange);
+      document.addEventListener('webkitfullscreenchange', handleFullScreenChange);
+      document.addEventListener('mozfullscreenchange', handleFullScreenChange);
+      document.addEventListener('MSFullscreenChange', handleFullScreenChange);
+      
       // 尝试从 localStorage 中获取 fileData
       let fileData = localStorage.getItem('currentFileData');
       console.log('💾 [localStorage] currentFileData:', fileData);
@@ -2073,6 +2183,7 @@ export default {
           console.log('🆔 [文件ID] file.value.id:', file.value.id);
           console.log('🔍 [文件所有属性] Object.keys(file.value):', Object.keys(file.value));
           console.log('📌 [会议类型] file.value.meeting_type:', file.value.meeting_type);
+          console.log('🎬 [是否视频文件] isVideoFile:', isVideoFile.value);
           
           // 确保我们有正确的文件ID才发起请求
           if (file.value.id) {
@@ -2093,12 +2204,33 @@ export default {
         console.error('❌ [错误] 没有获取到 fileData');
         console.log('💡 [提示] 如果直接输入URL，可能需要先从文件列表进入');
       }
+      
+      // 等待DOM更新后检查播放器容器
+      nextTick(() => {
+        console.log('🎬 [播放器容器] playerContainerRef:', playerContainerRef.value);
+        console.log('🎬 [媒体播放器] mediaPlayerRef:', mediaPlayerRef.value);
+      });
     });
     
     // 监听媒体播放器的加载，添加事件监听器
     watch(mediaPlayerRef, (newPlayer) => {
       if (newPlayer) {
         newPlayer.addEventListener('timeupdate', handleTimeUpdate);
+        
+        // 拦截视频原生全屏请求，改为播放器容器全屏
+        if (isVideoFile.value) {
+          const handleEnterFullscreen = (e) => {
+            console.log('🎬 拦截到视频原生全屏请求');
+            e.preventDefault();
+            e.stopPropagation();
+            toggleFullScreen();
+          };
+          
+          // 监听全屏相关事件
+          newPlayer.addEventListener('webkitfullscreenchange', (e) => {
+            console.log('🎬 视频全屏变化:', e);
+          });
+        }
       }
     }, { flush: 'post' });
     
@@ -2107,6 +2239,11 @@ export default {
       if (mediaPlayerRef.value) {
         mediaPlayerRef.value.removeEventListener('timeupdate', handleTimeUpdate);
       }
+      // 移除全屏事件监听
+      document.removeEventListener('fullscreenchange', handleFullScreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullScreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullScreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullScreenChange);
       // 清理定时器
       if (reactivateTimer) {
         clearTimeout(reactivateTimer);
@@ -2130,6 +2267,7 @@ export default {
       abstractData,
       segmentsData,
       transcriptionData,
+      unifiedTranscription,
       isEditingSummary,
       isEditingAbstract,
       summaryEditText,
@@ -2141,12 +2279,15 @@ export default {
       editingSegmentTitle,
       editingSegmentSummary,
       mediaPlayerRef,
+      playerContainerRef,
       currentPlayingIndex,
       highlightedSegmentIndex,
       highlightedTranscriptIndex,
       currentSubtitle,
+      isFullScreen,
       contentPanelRef,
       goBack,
+      toggleFullScreen,
       formatDate,
       formatTime,
       isVideoFile,
@@ -2951,6 +3092,21 @@ export default {
   min-height: 50px;
 }
 
+/* 隐藏视频原生全屏控件 */
+.media-player::-webkit-media-controls-fullscreen-button {
+  display: none !important;
+}
+
+/* 也可以尝试隐藏整个控制条的全屏按钮 */
+.media-player::-webkit-media-controls {
+  /* 确保我们的全屏按钮是可见的 */
+}
+
+/* Firefox */
+.media-player::-moz-media-controls-fullscreen-button {
+  display: none !important;
+}
+
 .stats-container {
   background: white;
   border-radius: 12px;
@@ -2982,15 +3138,191 @@ export default {
 }
 
 /* 字幕样式 */
+.player-container {
+  position: relative;
+}
+
+/* 全屏模式下的容器样式 */
+.player-container:fullscreen,
+.player-container:-webkit-full-screen,
+.player-container:-moz-full-screen,
+.player-container:-ms-full-screen {
+  width: 100vw !important;
+  height: 100vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: black !important;
+}
+
+/* 全屏时视频样式 */
+.player-container:fullscreen .media-player,
+.player-container:-webkit-full-screen .media-player,
+.player-container:-moz-full-screen .media-player,
+.player-container:-ms-full-screen .media-player {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  object-fit: contain !important;
+}
+
+/* 非全屏模式：字幕在容器里 */
 .subtitle-container {
-  background: white;
-  border-radius: 12px;
-  padding: 12px 16px;
-  border: 1px solid #eee;
-  margin-bottom: 8px;
+  position: absolute;
+  bottom: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.75);
+  border-radius: 8px;
+  padding: 10px 16px;
   display: flex;
   gap: 10px;
-  align-items: flex-start;
+  align-items: center;
+  max-width: 90%;
+  z-index: 10;
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+}
+
+/* 全屏模式下字幕在容器里（跟随容器） */
+.player-container:fullscreen .subtitle-container,
+.player-container:-webkit-full-screen .subtitle-container,
+.player-container:-moz-full-screen .subtitle-container,
+.player-container:-ms-full-screen .subtitle-container {
+  position: absolute !important;
+  bottom: 10% !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  max-width: 80% !important;
+  background: rgba(0, 0, 0, 0.85) !important;
+  padding: 12px 18px !important;
+  z-index: 9999 !important;
+  display: flex !important;
+}
+
+/* 备用方案：通过类名控制全屏样式 */
+.player-container.is-fullscreen {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 9999 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: black !important;
+  border-radius: 0 !important;
+}
+
+.player-container.is-fullscreen .media-player {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  object-fit: contain !important;
+}
+
+.player-container.is-fullscreen .subtitle-container {
+  position: absolute !important;
+  bottom: 10% !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  max-width: 80% !important;
+  background: rgba(0, 0, 0, 0.85) !important;
+  padding: 12px 18px !important;
+  z-index: 9999 !important;
+  display: flex !important;
+}
+
+.player-container.is-fullscreen .custom-fullscreen-btn {
+  display: flex !important;
+}
+
+/* 自定义全屏按钮样式 */
+.custom-fullscreen-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  width: 44px;
+  height: 44px;
+  font-size: 20px;
+  cursor: pointer;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(4px);
+}
+
+.custom-fullscreen-btn:hover {
+  background: rgba(0, 0, 0, 0.9);
+  border-color: rgba(255, 255, 255, 0.6);
+  transform: scale(1.1);
+}
+
+/* 全屏时按钮应该保持可见，用于退出 */
+.player-container:fullscreen .custom-fullscreen-btn,
+.player-container:-webkit-full-screen .custom-fullscreen-btn,
+.player-container:-moz-full-screen .custom-fullscreen-btn,
+.player-container:-ms-full-screen .custom-fullscreen-btn {
+  position: fixed !important;
+  top: 20px;
+  right: 20px;
+  z-index: 100001 !important;
+  display: flex !important;
+  background: rgba(0, 0, 0, 0.8);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.player-container.is-fullscreen .custom-fullscreen-btn {
+  position: fixed !important;
+  top: 20px;
+  right: 20px;
+  z-index: 100001 !important;
+  display: flex !important;
+  background: rgba(0, 0, 0, 0.8);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.subtitle-container.subtitle-fullscreen .subtitle-avatar-img {
+  width: 40px;
+  height: 40px;
+}
+
+.subtitle-container.subtitle-fullscreen .subtitle-avatar-default {
+  width: 40px;
+  height: 40px;
+  font-size: 20px;
+}
+
+.subtitle-container.subtitle-fullscreen .subtitle-speaker {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.subtitle-container.subtitle-fullscreen .subtitle-text {
+  font-size: 18px;
+  line-height: 1.5;
+}
+
+/* 全屏时更大的字幕容器 */
+.player-container:fullscreen .subtitle-container,
+.player-container:-webkit-full-screen .subtitle-container,
+.player-container:-moz-full-screen .subtitle-container,
+.player-container:-ms-full-screen .subtitle-container,
+.player-container.is-fullscreen .subtitle-container {
+  padding: 16px 24px !important;
+  border-radius: 12px !important;
+  gap: 14px !important;
 }
 
 .subtitle-avatar {
@@ -2998,23 +3330,23 @@ export default {
 }
 
 .subtitle-avatar-img {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   object-fit: cover;
-  border: 1px solid #eee;
+  border: 2px solid white;
 }
 
 .subtitle-avatar-default {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: #f5f7fa;
+  background: rgba(255, 255, 255, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
-  border: 1px solid #ddd;
+  font-size: 14px;
+  border: 2px solid white;
 }
 
 .subtitle-content {
@@ -3023,21 +3355,20 @@ export default {
 }
 
 .subtitle-speaker {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  color: #409eff;
-  margin-bottom: 4px;
+  color: #66b1ff;
+  margin-bottom: 2px;
 }
 
 .subtitle-text {
-  font-size: 14px;
-  color: #333;
-  line-height: 1.5;
+  font-size: 13px;
+  color: white;
+  line-height: 1.4;
   word-break: break-word;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  /* 显示全部内容 */
+  white-space: normal;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .stat-label {

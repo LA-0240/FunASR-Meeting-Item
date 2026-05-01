@@ -1,5 +1,4 @@
 from django.conf import settings
-# from django.http import Response
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from rest_framework.views import APIView
@@ -19,30 +18,34 @@ from ..voiceprint_utils import extract_voiceprint_feature, check_voiceprint_dupl
 import subprocess
 from collections import defaultdict
 
+
 # 自定义认证类，支持 Bearer Token
 class BearerTokenAuthentication(TokenAuthentication):
     keyword = 'Bearer'
 
-# ------------------- ASR语音转文字接口 -------------------
+
+# ------------------- 视频ASR语音转文字接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
-class ASRTranscribeView(APIView):
+class VideoASRTranscribeView(APIView):
     authentication_classes = [BearerTokenAuthentication, TokenAuthentication]
     permission_classes = [AllowAny]
     def post(self, request):
-        """语音转文字接口，支持多说话人声纹识别（两步法：分离→切割→匹配）"""
+        """视频ASR语音转文字接口，支持多说话人声纹识别"""
         temp_file = None
+        temp_audio = None
         try:
             # 1. 校验文件上传
             if 'file' not in request.FILES:
                 return Response(
-                    {"status": "failed", "detail": "未上传音频文件"},
+                    {"status": "failed", "detail": "未上传视频文件"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
             file = request.FILES['file']
-            if not file.name.lower().endswith(settings.ALLOWED_EXTENSIONS):
+            allowed_video_exts = getattr(settings, 'ALLOWED_VIDEO_EXTENSIONS', ('.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv'))
+            if not file.name.lower().endswith(allowed_video_exts):
                 return Response(
-                    {"status": "failed", "detail": f"仅支持格式：{settings.ALLOWED_EXTENSIONS}"},
+                    {"status": "failed", "detail": f"仅支持格式：{allowed_video_exts}"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
@@ -53,14 +56,19 @@ class ASRTranscribeView(APIView):
                 for chunk in file.chunks():
                     f.write(chunk)
 
-            # 3. 解析参数
+            # 3. 从视频中提取音频
+            print(f"[{datetime.now()}] 从视频中提取音频...")
+            temp_audio = os.path.join(settings.TEMP_DIR, f"{uuid.uuid4()}_audio.wav")
+            extract_audio_from_video(temp_file, temp_audio)
+
+            # 4. 解析参数
             batch_size_s = int(request.POST.get("batch_size_s", 300))
             hotword = request.POST.get("hotword", None)
 
             # ===================== 步骤1：FunASR 说话人分离 + ASR识别 =====================
             print(f"[{datetime.now()}] 第一步：说话人分离 + 语音识别")
             result = asr_model.generate(
-                input=temp_file,
+                input=temp_audio,
                 batch_size_s=batch_size_s,
                 hotword=hotword,
                 punc=True,
@@ -68,7 +76,7 @@ class ASRTranscribeView(APIView):
                 speaker_diarization=True
             )
 
-            # 4. 格式化结果
+            # 5. 格式化结果
             formatted_result = []
             speaker_ids = set()
             sentence_info = result[0].get("sentence_info", []) if result else []
@@ -103,7 +111,7 @@ class ASRTranscribeView(APIView):
             speaker_info_map = {}  # {spk_id: {"name": "...", "avatar_url": "...", "speaker_obj": Speaker}}
 
             for spk_id, segments in speaker_segments.items():
-                # === 优化：选择 TOP 3 最长片段，提取特征取平均 ===
+                # 优化：选择 TOP 3 最长片段，提取特征取平均
                 segments.sort(key=lambda x: x[1] - x[0], reverse=True)
                 top_segments = segments[:3]  # 取最长的3个片段
                 clip_paths = []
@@ -118,12 +126,12 @@ class ASRTranscribeView(APIView):
                     clip_path = os.path.join(settings.TEMP_DIR, f"speaker_clip_{spk_id}_{idx}.wav")
                     clip_paths.append(clip_path)
 
-                    # ===================== ffmpeg 切割音频 =====================
+                    # ffmpeg 切割音频
                     subprocess.run([
                         "ffmpeg",
                         "-ss", str(start_sec),
                         "-t", str(duration_sec),
-                        "-i", temp_file,
+                        "-i", temp_audio,
                         "-ar", "16000",
                         "-ac", "1",
                         "-y",
@@ -135,7 +143,7 @@ class ASRTranscribeView(APIView):
                     if feat is not None:
                         features.append(feat)
 
-                # === 优化：多个特征取平均 ===
+                # 优化：多个特征取平均
                 if features:
                     avg_feat = np.mean(features, axis=0)  # 平均特征
                     # 只有登录用户才使用声纹匹配
@@ -144,7 +152,7 @@ class ASRTranscribeView(APIView):
                     print(f"ASR 用户: {request.user.username if request.user.is_authenticated else '匿名'}")
                     # 传入会议中的说话人数量用于动态阈值
                     result, similarity = match_voiceprint(avg_feat, user=user, speaker_count=len(speaker_segments))
-                    
+
                     # 处理匹配结果
                     if isinstance(result, Speaker):
                         # 匹配到了新模型的 Speaker
@@ -164,30 +172,25 @@ class ASRTranscribeView(APIView):
                                     "ffmpeg",
                                     "-ss", str(best_start / 1000.0),
                                     "-t", str((best_end - best_start) / 1000.0),
-                                    "-i", temp_file,
+                                    "-i", temp_audio,
                                     "-ar", "16000",
                                     "-ac", "1",
                                     "-y",
                                     clip_path
                                 ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                                
+
                                 # 追加声纹
                                 if user.is_authenticated:
-                                    # 🔧 修复：保存到 voiceprint_audio 目录（media下的），通过 Django FileField 保存！
-                                    # 🔧 注意：这里不自己处理路径，传给 append_voiceprint 的是音频的文件路径，由 append_voiceprint 处理！
-                                    
-                                    # 🔧 修复：从 request.uploaded_file 获取
                                     upload_file_obj = getattr(request, 'uploaded_file', None)
                                     append_voiceprint(
                                         speaker=result,
                                         feature=avg_feat,
                                         user=user,
-                                        audio_path=clip_path,  # 直接给临时音频路径，由 append_voiceprint 处理保存
+                                        audio_path=clip_path,
                                         source_meeting=upload_file_obj,
-                                        source_type='auto'  # 自动追加
+                                        source_type='auto'
                                     )
                             finally:
-                                # 🔧 修复：清理临时文件（等 append_voiceprint 用完再删！）
                                 if os.path.exists(clip_path):
                                     try:
                                         os.remove(clip_path)
@@ -202,7 +205,7 @@ class ASRTranscribeView(APIView):
                             "avatar_url": None,
                             "speaker_obj": None
                         }
-                    
+
                     print(f"ASR 声纹匹配结果（基于{len(features)}个片段平均）: {name}")
                 else:
                     speaker_info_map[spk_id] = {
@@ -234,7 +237,7 @@ class ASRTranscribeView(APIView):
                 info = speaker_info_map.get(spk_id, {"name": f"spk-{spk_id}", "avatar_url": None})
                 name = info["name"]
                 avatar_url = info["avatar_url"]
-                
+
                 segments.append({
                     "speaker": name,
                     "avatar_url": avatar_url,
@@ -271,5 +274,10 @@ class ASRTranscribeView(APIView):
             if temp_file and os.path.exists(temp_file):
                 try:
                     os.remove(temp_file)
+                except:
+                    pass
+            if temp_audio and os.path.exists(temp_audio):
+                try:
+                    os.remove(temp_audio)
                 except:
                     pass

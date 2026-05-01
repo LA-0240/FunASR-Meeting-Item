@@ -87,7 +87,7 @@
               class="voiceprint-card"
               :class="{ playing: playingVoiceprint?.id === vp.id }"
             >
-              <div class="voiceprint-preview" @click="handleTogglePlayVoiceprint(vp)">
+              <div class="voiceprint-preview" @click.stop="handleTogglePlayVoiceprint(vp)">
                 <div v-if="playingVoiceprint?.id === vp.id" class="sound-waves">
                   <div class="wave"></div>
                   <div class="wave"></div>
@@ -106,11 +106,11 @@
                 <div class="voiceprint-date">{{ formatDate(vp.created_at) }}</div>
               </div>
               <div class="voiceprint-actions">
-                <button class="update-btn" @click="showUpdateVoiceprintModalHandler(vp)">更新</button>
+                <button class="update-btn" @click.stop="showUpdateVoiceprintModalHandler(vp)">更新</button>
                 <button
                   class="delete-vp-btn"
                   :disabled="isFirstManualVoiceprint(vp)"
-                  @click="handleDeleteVoiceprint(vp)"
+                  @click.stop="handleDeleteVoiceprint(vp)"
                 >
                   删除
                 </button>
@@ -615,71 +615,31 @@ export default {
       stopPlayback();
       
       try {
-        console.log('[DEBUG] ============= 开始播放声纹 =============');
-        console.log('[DEBUG] 完整 vp 对象:', vp);
-        console.log('[DEBUG] vp.audio_url 值:', vp.audio_url);
-        
-        // 🌟 优先使用 audio_url
         let audioUrl = null;
         if (vp.audio_url) {
           audioUrl = API_BASE_URL + vp.audio_url;
         }
-        
-        console.log('[DEBUG] API_BASE_URL:', API_BASE_URL);
-        console.log('[DEBUG] 最终 audioUrl:', audioUrl);
         
         if (!audioUrl) {
           alert('该声纹没有对应的音频文件');
           return;
         }
         
-        // 先尝试用 fetch 测试一下这个 URL 是否能请求到
-        console.log('[DEBUG] 用 fetch 测试 URL 是否可访问...');
-        try {
-          const testResp = await fetch(audioUrl, { method: 'HEAD' });
-          console.log('[DEBUG] fetch HEAD 状态码:', testResp.status, testResp.statusText);
-          if (testResp.status === 404) {
-            console.error('[DEBUG] 文件不存在！404 错误！');
-            alert('音频文件不存在 (404)！请检查后端是否正确保存了文件！');
-            return;
-          }
-        } catch (fetchErr) {
-          console.warn('[DEBUG] HEAD 请求失败，可能是跨域，继续尝试播放:', fetchErr);
-        }
-        
         playingVoiceprint.value = vp;
         audioElement.value = new Audio(audioUrl);
         
         audioElement.value.onerror = (e) => {
-          console.error('[DEBUG] 音频加载错误事件对象:', e);
-          console.error('[DEBUG] audioElement 错误:', audioElement.value.error);
           alert('音频加载失败，请检查网络或文件是否存在');
           stopPlayback();
-        };
-        
-        audioElement.value.onloadedmetadata = () => {
-          console.log('[DEBUG] 音频元数据加载成功！时长:', audioElement.value.duration);
         };
         
         audioElement.value.onended = () => {
           stopPlayback();
         };
         
-        console.log('[DEBUG] 开始调用 audioElement.play()...');
-        const playPromise = audioElement.value.play();
-        if (playPromise !== undefined) {
-          playPromise.then(_ => {
-            console.log('[DEBUG] 播放成功开始！');
-          })
-          .catch(error => {
-            console.error('[DEBUG] play() 抛出异常:', error);
-            alert('播放失败: ' + (error.message || '未知错误'));
-            stopPlayback();
-          });
-        }
+        await audioElement.value.play();
       } catch (error) {
-        console.error('[DEBUG] 播放失败（外层 catch）:', error);
-        console.error('[DEBUG] 错误栈:', error.stack);
+        console.error('播放失败:', error);
         alert('播放失败: ' + (error.message || '未知错误'));
         stopPlayback();
       }
@@ -688,17 +648,30 @@ export default {
     const stopPlayback = () => {
       if (audioElement.value) {
         audioElement.value.pause();
+        audioElement.value.currentTime = 0;
         audioElement.value = null;
       }
       playingVoiceprint.value = null;
     };
 
+    // 全局点击监听器 - 点击任何声纹卡片外的地方都停止播放
+    const handleOutsideClick = (event) => {
+      if (!playingVoiceprint.value) return;
+      
+      const voiceprintCard = event.target.closest('.voiceprint-card');
+      if (!voiceprintCard) {
+        stopPlayback();
+      }
+    };
+
     onMounted(() => {
       loadSpeakers();
+      document.addEventListener('click', handleOutsideClick);
     });
 
     onUnmounted(() => {
       stopPlayback();
+      document.removeEventListener('click', handleOutsideClick);
     });
 
     return {

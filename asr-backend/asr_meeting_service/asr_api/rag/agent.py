@@ -122,7 +122,7 @@ class MeetingAgent:
                 try:
                     file_obj = UploadedFile.objects.get(id=self.file_id)
                     transcription = Transcription.objects.get(file=file_obj)
-                    speaker_info = transcription.raw_sentence_info or transcription.speaker_info or []
+                    speaker_info = transcription.segments or []
                     speakers = list(set([s.get('speaker', '未知说话人') for s in speaker_info]))
                     # 简单：尝试找问题中包含的发言人名字
                     for s in speakers:
@@ -168,7 +168,7 @@ class MeetingAgent:
                 try:
                     file_obj = UploadedFile.objects.get(id=self.file_id)
                     transcription = Transcription.objects.get(file=file_obj)
-                    speaker_info = transcription.raw_sentence_info or transcription.speaker_info or []
+                    speaker_info = transcription.segments or []
                     if speaker_info:
                         total_duration = speaker_info[-1].get('end_time', 0)
                         if "前" in user_message and "分钟" in user_message:
@@ -505,7 +505,7 @@ class MeetingAgent:
             file_obj = UploadedFile.objects.get(id=self.file_id)
             transcription = Transcription.objects.get(file=file_obj)
             # 优先使用原始句子数据，兼容旧数据
-            speaker_info = transcription.raw_sentence_info or transcription.speaker_info or []
+            speaker_info = transcription.segments or []
             
             print(f"[DEBUG] 发言统计工具获取到的原始 speaker_info 前5条: {speaker_info[:5] if len(speaker_info) > 5 else speaker_info}")
             
@@ -663,7 +663,7 @@ class MeetingAgent:
             file_obj = UploadedFile.objects.get(id=self.file_id)
             transcription = Transcription.objects.get(file=file_obj)
             # 优先使用原始句子数据，兼容旧数据
-            speaker_info = transcription.raw_sentence_info or transcription.speaker_info or []
+            speaker_info = transcription.segments or []
             
             print(f"[DEBUG] RAG 获取到的原始 speaker_info 前5条: {speaker_info[:5] if len(speaker_info) > 5 else speaker_info}")
             
@@ -878,7 +878,7 @@ class MeetingAgent:
             file_obj = UploadedFile.objects.get(id=self.file_id)
             transcription = Transcription.objects.get(file=file_obj)
             # 优先使用原始句子数据，兼容旧数据
-            speaker_info = transcription.raw_sentence_info or transcription.speaker_info or []
+            speaker_info = transcription.segments or []
             
             # 如果不指定 speaker_name，先返回所有发言人选项
             if not speaker_name:
@@ -922,7 +922,7 @@ class MeetingAgent:
             file_obj = UploadedFile.objects.get(id=self.file_id)
             transcription = Transcription.objects.get(file=file_obj)
             # 优先使用原始句子数据，兼容旧数据
-            speaker_info = transcription.raw_sentence_info or transcription.speaker_info or []
+            speaker_info = transcription.segments or []
             
             # 如果不指定时间，先返回总时长
             if start_time is None or end_time is None:
@@ -977,7 +977,7 @@ class MeetingAgent:
             file_obj = UploadedFile.objects.get(id=self.file_id)
             transcription = Transcription.objects.get(file=file_obj)
             # 优先使用原始句子数据，兼容旧数据
-            speaker_info = transcription.raw_sentence_info or transcription.speaker_info or []
+            speaker_info = transcription.segments or []
             
             if not keyword:
                 return {
@@ -1058,7 +1058,7 @@ class MeetingAgent:
             
             # 获取该分段的关联逐字稿（优先使用原始数据）
             transcription = Transcription.objects.get(file=file_obj)
-            speaker_info = transcription.raw_sentence_info or transcription.speaker_info or []
+            speaker_info = transcription.segments or []
             
             # 过滤出该分段时间范围内的句子
             seg_start = target_segment.start_time or 0

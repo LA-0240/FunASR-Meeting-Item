@@ -58,22 +58,23 @@ class TranscriptionSearchView(APIView):
                 )
             
             # 5. 解析逐字稿数据（兼容新旧字段）
-            segments = transcription.unified_segments
+            segments = transcription.segments or []
             if not segments:
                 return Response(
                     {"status": "failed", "detail": "逐字稿内容为空"},
                     status=HTTP_400_BAD_REQUEST
                 )
             
-            # 6. 搜索关键词
+            # 6. 搜索关键词（支持大小写不敏感）
             matches = []
+            keyword_lower = keyword.lower()
             for index, sentence in enumerate(segments):
                 text = sentence.get("text", "")
-                if keyword in text:
-                    # 生成高亮文本
-                    highlighted_text = re.sub(
-                        f"({re.escape(keyword)})",
-                        r"<span class='highlight-yellow'>\1</span>",
+                if keyword_lower in text.lower():
+                    # 生成高亮文本（大小写不敏感）
+                    pattern = re.compile(re.escape(keyword), re.IGNORECASE)
+                    highlighted_text = pattern.sub(
+                        r"<span class='highlight-yellow'>\g<0></span>",
                         text
                     )
                     
@@ -128,8 +129,8 @@ class TranscriptionGetView(APIView):
                     status=HTTP_404_NOT_FOUND
                 )
             
-            # 3. 获取统一的分段数据（兼容新旧字段）
-            segments = transcription.unified_segments
+            # 3. 获取统一的分段数据
+            segments = transcription.segments or []
             # 获取当前用户的所有 Speaker
             speakers = {sp.name: sp for sp in Speaker.objects.filter(user=request.user)}
             
@@ -148,15 +149,13 @@ class TranscriptionGetView(APIView):
                     'avatar_url': avatar_url
                 })
             
-            # 4. 准备返回数据（同时返回新旧字段，兼容前端）
+            # 4. 准备返回数据
             return Response({
                 "status": "success",
                 "file_id": file_id,
                 "file_name": file.original_name,
                 "transcription_text": transcription.transcription_text,
-                "segments": segments_with_avatar,  # 新统一字段
-                "speaker_info": segments_with_avatar,  # 兼容旧前端
-                "raw_sentence_info": segments_with_avatar,  # 兼容旧前端
+                "segments": segments_with_avatar,
                 "created_at": transcription.created_at.isoformat(),
                 "updated_at": transcription.updated_at.isoformat()
             }, status=HTTP_200_OK)
@@ -207,7 +206,7 @@ class TranscriptionEditView(APIView):
                 )
             
             # 5. 解析逐字稿数据（兼容新旧字段）
-            segments = transcription.unified_segments
+            segments = transcription.segments or []
             if not segments:
                 return Response(
                     {"status": "failed", "detail": "逐字稿内容为空"},
@@ -249,10 +248,8 @@ class TranscriptionEditView(APIView):
             # 8. 重新生成转录文本
             transcription_text = '\n'.join([f"{item.get('speaker', '未知说话人')}: {item.get('text', '')}" for item in segments])
             
-            # 9. 保存修改（同时更新所有字段，保持兼容）
+            # 9. 保存修改
             transcription.segments = segments
-            transcription.speaker_info = segments
-            transcription.raw_sentence_info = segments
             transcription.transcription_text = transcription_text
             transcription.save()
             
@@ -263,8 +260,7 @@ class TranscriptionEditView(APIView):
                 "sentence_index": sentence_index,
                 "original_sentence": original_sentence,
                 "updated_sentence": segments[sentence_index],
-                "segments": segments,  # 新字段
-                "transcription": segments  # 兼容旧字段
+                "segments": segments
             }
             
             # 如果修改了说话人，返回批量更新信息
@@ -445,23 +441,19 @@ class TranscriptionGenerateView(APIView):
             # 10. 生成转录文本
             transcription_text = '\n'.join([f"{item['speaker']}: {item['text']}" for item in unified_segments])
             
-            # 11. 保存或更新逐字稿（同时更新新旧字段，保持兼容）
+            # 11. 保存或更新逐字稿
             try:
                 # 如果已存在，更新
                 transcription = Transcription.objects.get(file=file)
                 transcription.transcription_text = transcription_text
                 transcription.segments = unified_segments
-                transcription.speaker_info = unified_segments
-                transcription.raw_sentence_info = unified_segments
                 transcription.save()
             except Transcription.DoesNotExist:
                 # 如果不存在，创建新的
                 transcription = Transcription(
                     file=file,
                     transcription_text=transcription_text,
-                    segments=unified_segments,
-                    speaker_info=unified_segments,
-                    raw_sentence_info=unified_segments
+                    segments=unified_segments
                 )
                 transcription.save()
             
@@ -477,8 +469,7 @@ class TranscriptionGenerateView(APIView):
                 "file_name": file.original_name,
                 "file_type": file.file_type,
                 "transcription_id": transcription.id,
-                "segments": unified_segments,  # 新字段
-                "transcription": unified_segments,  # 兼容旧前端
+                "segments": unified_segments,
                 "speaker_stats": transcription_data.get('speaker_stats', {})
             }, status=HTTP_200_OK)
         

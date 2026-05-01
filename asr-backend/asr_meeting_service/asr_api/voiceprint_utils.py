@@ -6,26 +6,19 @@ from .models import Voiceprint, Speaker, voiceprint_model
 
 MAX_VOICEPRINTS_PER_SPEAKER = 4
 
-def extract_voiceprint_feature(audio_path, use_vad=True, vad_mode='strict'):
+def extract_voiceprint_feature(audio_path, use_vad=False, vad_mode='strict'):
     """
-    官方标准声纹提取 + VAD 数据清洗（可选）
+    官方标准声纹提取
     
     :param audio_path: 音频文件路径
-    :param use_vad: 是否启用 VAD 清洗（默认 True）
+    :param use_vad: 是否启用 VAD 清洗（已禁用）
     :param vad_mode: VAD 模式 ('strict'/'normal'/'loose')
     """
     cleaned_path = None
     try:
         # === VAD 数据清洗 ===
         if use_vad:
-            from .vad_utils import vad_clean_audio
-            print(f"[声纹提取] 开始 VAD 清洗: {audio_path}")
-            cleaned_path = vad_clean_audio(audio_path, vad_mode=vad_mode)
-            if cleaned_path and cleaned_path != audio_path:
-                print(f"[声纹提取] ✅ VAD 清洗完成，使用清洗后音频: {cleaned_path}")
-                audio_path = cleaned_path
-            else:
-                print(f"[声纹提取] ⚠️ VAD 清洗未生效，使用原音频")
+            print(f"[声纹提取] ⚠️ VAD 已禁用，直接使用原音频")
         
         res = voiceprint_model.generate(
             input=audio_path,
@@ -197,9 +190,29 @@ def append_voiceprint(speaker, feature, user=None, audio_file=None, audio_path=N
     :param audio_path: 音频文件路径（可选，本地文件路径）
     :param source_meeting: 来源会议（UploadedFile 对象，可选）
     :param source_type: 声纹来源类型（'auto' 或 'manual'，默认 'auto'）
-    :return: 创建的 Voiceprint 对象
+    :return: 创建的 Voiceprint 对象，或者如果相似度超过96%则返回 None（不添加）
     """
     try:
+        # 如果是 auto 声纹，先检查是否有已有的 auto 声纹
+        if source_type == 'auto':
+            auto_voiceprints = speaker.voiceprints.filter(source_type='auto')
+            if auto_voiceprints.exists():
+                # 有 auto 声纹，检查相似度
+                max_similarity = 0
+                for vp in auto_voiceprints:
+                    vp_feature = Voiceprint.binary_to_feature(vp.feature)
+                    similarity, _ = Voiceprint.calculate_similarity(feature, vp_feature)
+                    print(f"说话人 {speaker.name} 已有的 auto 声纹相似度: {similarity:.4f}")
+                    if similarity > max_similarity:
+                        max_similarity = similarity
+                
+                # 如果相似度超过 96%，不添加
+                if max_similarity >= 0.96:
+                    print(f"声纹相似度 {max_similarity:.4f} >= 0.96，不添加重复声纹")
+                    return None
+                
+                print(f"最高相似度 {max_similarity:.4f} < 0.96，继续添加声纹")
+        
         existing_count = speaker.voiceprints.count()
         print(f"说话人 {speaker.name} 当前声纹数: {existing_count}")
         

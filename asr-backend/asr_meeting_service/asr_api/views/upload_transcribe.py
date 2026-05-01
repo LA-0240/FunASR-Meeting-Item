@@ -143,13 +143,11 @@ class FileUploadTranscribeView(APIView):
             # 9. 生成转录文本
             transcription_text = '\n'.join([f"{item['speaker']}: {item['text']}" for item in unified_segments])
             
-            # 10. 保存逐字稿（同时更新新旧字段，保持兼容）
+            # 10. 保存逐字稿
             transcription = Transcription(
                 file=uploaded_file,
                 transcription_text=transcription_text,
-                speaker_info=unified_segments,  # 旧字段
-                raw_sentence_info=unified_segments,  # 旧字段
-                segments=unified_segments  # 新字段
+                segments=unified_segments
             )
             transcription.save()
             
@@ -168,8 +166,7 @@ class FileUploadTranscribeView(APIView):
                 "upload_time": uploaded_file.upload_time.isoformat(),
                 "meeting_type": uploaded_file.meeting_type,
                 "transcription_id": transcription.id,
-                "segments": unified_segments,  # 新字段
-                "transcription": unified_segments,  # 兼容旧字段
+                "segments": unified_segments,
                 "speaker_stats": transcription_data.get('speaker_stats', {})
             }, status=HTTP_200_OK)
         

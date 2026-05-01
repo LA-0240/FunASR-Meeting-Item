@@ -1,31 +1,92 @@
 <template>
   <div class="login-container">
-    <div class="login-form" 
-         @mousemove="handleMouseMove" 
-         @mouseleave="handleMouseLeave"
-         ref="cardRef"
-         :style="cardStyle">
-      <div class="logo">🎤</div>
-      <h1>基于FunASR和LLM的智能会议系统</h1>
-      <div class="form-group">
-        <label for="username">用户名</label>
-        <div class="input-container">
-          <span class="input-icon">👤</span>
-          <input type="text" id="username" v-model="form.username" placeholder="请输入用户名" />
+    <div class="flip-card" :class="{ 'flipped': isFlipped }">
+      <div class="flip-card-inner">
+        <!-- 登录卡片（正面） -->
+        <div class="card-front">
+          <div class="login-form" 
+               @mousemove="handleMouseMove" 
+               @mouseleave="handleMouseLeave"
+               ref="cardRef"
+               :style="cardStyle">
+            <div class="logo">🎤</div>
+            <h1>基于FunASR和LLM的智能会议系统</h1>
+            <div class="form-group">
+              <label for="username">用户名</label>
+              <div class="input-container">
+                <span class="input-icon">👤</span>
+                <input type="text" id="username" v-model="loginForm.username" placeholder="请输入用户名" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="password">密码</label>
+              <div class="input-container">
+                <span class="input-icon">🔒</span>
+                <input type="password" id="password" v-model="loginForm.password" placeholder="请输入密码" />
+              </div>
+            </div>
+            <button @click="login" :disabled="loginLoading" class="login-btn">
+              <span v-if="loginLoading" class="loading-spinner"></span>
+              {{ loginLoading ? '登录中...' : '登录' }}
+            </button>
+            <p v-if="loginError" class="error-message">{{ loginError }}</p>
+          </div>
+          <!-- 右侧翻转箭头 -->
+          <div class="flip-arrow arrow-right" @click="toggleFlip">
+            <span class="arrow-icon">→</span>
+          </div>
+        </div>
+
+        <!-- 注册卡片（背面） -->
+        <div class="card-back">
+          <div class="login-form register-form" 
+               @mousemove="handleMouseMove" 
+               @mouseleave="handleMouseLeave"
+               ref="cardRef"
+               :style="cardStyle">
+            <div class="logo">🎤</div>
+            <h1>用户注册</h1>
+            <div class="form-group">
+              <label for="reg-username">用户名</label>
+              <div class="input-container">
+                <span class="input-icon">👤</span>
+                <input type="text" id="reg-username" v-model="registerForm.username" placeholder="请输入用户名" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="reg-email">邮箱</label>
+              <div class="input-container">
+                <span class="input-icon">📧</span>
+                <input type="email" id="reg-email" v-model="registerForm.email" placeholder="请输入邮箱" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="reg-password">密码</label>
+              <div class="input-container">
+                <span class="input-icon">🔒</span>
+                <input type="password" id="reg-password" v-model="registerForm.password" placeholder="请输入密码" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="reg-password2">确认密码</label>
+              <div class="input-container">
+                <span class="input-icon">🔒</span>
+                <input type="password" id="reg-password2" v-model="registerForm.password2" placeholder="请再次输入密码" />
+              </div>
+            </div>
+            <button @click="register" :disabled="registerLoading" class="register-btn">
+              <span v-if="registerLoading" class="loading-spinner"></span>
+              {{ registerLoading ? '注册中...' : '注册' }}
+            </button>
+            <p v-if="registerError" class="error-message">{{ registerError }}</p>
+            <p v-if="registerSuccess" class="success-message">{{ registerSuccess }}</p>
+          </div>
+          <!-- 左侧翻转箭头 -->
+          <div class="flip-arrow arrow-left" @click="toggleFlip">
+            <span class="arrow-icon">←</span>
+          </div>
         </div>
       </div>
-      <div class="form-group">
-        <label for="password">密码</label>
-        <div class="input-container">
-          <span class="input-icon">🔒</span>
-          <input type="password" id="password" v-model="form.password" placeholder="请输入密码" />
-        </div>
-      </div>
-      <button @click="login" :disabled="loading" class="login-btn">
-        <span v-if="loading" class="loading-spinner"></span>
-        {{ loading ? '登录中...' : '登录' }}
-      </button>
-      <p v-if="error" class="error-message">{{ error }}</p>
     </div>
   </div>
 </template>
@@ -39,9 +100,14 @@ export default {
   name: 'LoginView',
   setup() {
     const router = useRouter();
-    const form = ref({ username: '', password: '' });
-    const loading = ref(false);
-    const error = ref('');
+    const loginForm = ref({ username: '', password: '' });
+    const registerForm = ref({ username: '', email: '', password: '', password2: '' });
+    const loginLoading = ref(false);
+    const registerLoading = ref(false);
+    const loginError = ref('');
+    const registerError = ref('');
+    const registerSuccess = ref('');
+    const isFlipped = ref(false);
     const cardRef = ref(null);
     const transform = reactive({
       rotateX: 0,
@@ -54,6 +120,13 @@ export default {
         transform: `perspective(1000px) rotateX(${transform.rotateX}deg) rotateY(${transform.rotateY}deg) scale(${transform.scale})`
       };
     });
+
+    const toggleFlip = () => {
+      isFlipped.value = !isFlipped.value;
+      loginError.value = '';
+      registerError.value = '';
+      registerSuccess.value = '';
+    };
 
     const handleMouseMove = (e) => {
       if (!cardRef.value) return;
@@ -82,39 +155,103 @@ export default {
     };
 
     const login = async () => {
-      if (!form.value.username || !form.value.password) {
-        error.value = '请输入用户名和密码';
+      if (!loginForm.value.username || !loginForm.value.password) {
+        loginError.value = '请输入用户名和密码';
         return;
       }
 
-      loading.value = true;
-      error.value = '';
+      loginLoading.value = true;
+      loginError.value = '';
 
       try {
         const response = await userApi.login({
-          username: form.value.username,
-          password: form.value.password
+          username: loginForm.value.username,
+          password: loginForm.value.password
         });
 
-        // 检查是否有token，有token就表示登录成功
         if (localStorage.getItem('token')) {
           router.push('/home');
         } else {
-          error.value = response.detail || '登录失败';
+          loginError.value = response.detail || '登录失败';
         }
       } catch (err) {
-        error.value = '登录失败，请检查网络连接或后端服务';
+        loginError.value = '登录失败，请检查网络连接或后端服务';
         console.error('登录错误:', err);
       } finally {
-        loading.value = false;
+        loginLoading.value = false;
+      }
+    };
+
+    const register = async () => {
+      if (!registerForm.value.username || !registerForm.value.password || !registerForm.value.email) {
+        registerError.value = '请填写所有必填项';
+        return;
+      }
+
+      if (registerForm.value.password !== registerForm.value.password2) {
+        registerError.value = '两次输入的密码不一致';
+        return;
+      }
+
+      if (registerForm.value.password.length < 6) {
+        registerError.value = '密码长度至少6位';
+        return;
+      }
+
+      registerLoading.value = true;
+      registerError.value = '';
+      registerSuccess.value = '';
+
+      try {
+        const response = await userApi.register({
+          username: registerForm.value.username,
+          email: registerForm.value.email,
+          password: registerForm.value.password
+        });
+
+        registerSuccess.value = '注册成功！请登录';
+        
+        setTimeout(() => {
+          isFlipped.value = false;
+          loginForm.value.username = registerForm.value.username;
+          registerForm.value = { username: '', email: '', password: '', password2: '' };
+          registerSuccess.value = '';
+        }, 1500);
+      } catch (err) {
+        if (err.response?.data) {
+          const data = err.response.data;
+          if (data.username) {
+            registerError.value = `用户名错误: ${data.username.join(', ')}`;
+          } else if (data.email) {
+            registerError.value = `邮箱错误: ${data.email.join(', ')}`;
+          } else if (data.password) {
+            registerError.value = `密码错误: ${data.password.join(', ')}`;
+          } else if (data.detail) {
+            registerError.value = data.detail;
+          } else {
+            registerError.value = '注册失败，请检查输入';
+          }
+        } else {
+          registerError.value = '注册失败，请检查网络连接或后端服务';
+        }
+        console.error('注册错误:', err);
+      } finally {
+        registerLoading.value = false;
       }
     };
 
     return {
-      form,
-      loading,
-      error,
+      loginForm,
+      registerForm,
+      loginLoading,
+      registerLoading,
+      loginError,
+      registerError,
+      registerSuccess,
+      isFlipped,
       login,
+      register,
+      toggleFlip,
       cardRef,
       cardStyle,
       handleMouseMove,
@@ -140,8 +277,6 @@ export default {
   background-repeat: no-repeat;
   overflow: hidden;
   z-index: 1;
-  perspective: 1000px;
-  transform-style: preserve-3d;
 }
 
 .login-container::before {
@@ -155,6 +290,53 @@ export default {
   z-index: 0;
 }
 
+/* 翻转卡片容器 */
+.flip-card {
+  position: relative;
+  width: 480px;
+  perspective: 1500px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 翻转动画 */
+.flip-card-inner {
+  position: relative;
+  width: 100%;
+  min-height: 450px;
+  transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transform-style: preserve-3d;
+}
+
+.flip-card.flipped .flip-card-inner {
+  transform: rotateY(180deg);
+}
+
+.flip-card .card-front,
+.flip-card .card-back {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  min-height: 450px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.flip-card .card-front {
+  z-index: 2;
+}
+
+.flip-card .card-back {
+  transform: rotateY(180deg);
+  z-index: 1;
+}
+
+/* 原有登录表单样式 - 保持不变 */
 .login-form {
   position: relative;
   z-index: 10;
@@ -171,6 +353,28 @@ export default {
 }
 
 .login-form:hover {
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+
+/* 注册表单额外样式 */
+.register-form {
+  /* 继承 login-form 的所有样式 */
+  position: relative;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 40px;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  width: 480px;
+  transition: transform 0.15s ease-out, box-shadow 0.3s ease;
+  transform-style: preserve-3d;
+  margin-top: -70px;
+}
+
+.register-form:hover {
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
 }
 
@@ -275,6 +479,38 @@ export default {
   box-shadow: none;
 }
 
+/* 注册按钮 - 绿色 */
+.register-btn {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, #67c23a 0%, #85ce61 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-top: 20px;
+  transition: all 0.3s ease;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+}
+
+.register-btn:hover {
+  background: linear-gradient(135deg, #85ce61 0%, #67c23a 100%);
+  box-shadow: 0 4px 12px rgba(103, 194, 58, 0.3);
+  transform: translateY(-2px);
+}
+
+.register-btn:disabled {
+  background: linear-gradient(135deg, #c2e7b0 0%, #b3e19d 100%);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 .loading-spinner {
   width: 16px;
   height: 16px;
@@ -298,5 +534,67 @@ export default {
   padding: 10px;
   border-radius: 4px;
   border-left: 4px solid #f56c6c;
+}
+
+.success-message {
+  color: #67c23a;
+  text-align: center;
+  margin-top: 15px;
+  font-size: 14px;
+  background-color: #f0f9eb;
+  padding: 10px;
+  border-radius: 4px;
+  border-left: 4px solid #67c23a;
+}
+
+/* 翻转箭头样式 */
+.flip-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  z-index: 100;
+  animation: breathe 2s ease-in-out infinite;
+}
+
+.flip-arrow.arrow-right {
+  right: -60px;
+}
+
+.flip-arrow.arrow-left {
+  left: -60px;
+}
+
+.arrow-icon {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 50px;
+  height: 50px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  font-size: 24px;
+  color: #333;
+  transition: all 0.3s ease;
+}
+
+.flip-arrow:hover .arrow-icon {
+  background: rgba(255, 255, 255, 0.6);
+  transform: scale(1.1);
+}
+
+/* 呼吸动画 */
+@keyframes breathe {
+  0%, 100% {
+    opacity: 0.5;
+    transform: translateY(-50%) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-50%) scale(1.15);
+  }
 }
 </style>

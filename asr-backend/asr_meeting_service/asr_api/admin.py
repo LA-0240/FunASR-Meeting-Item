@@ -4,6 +4,7 @@ from django.contrib import messages
 from .models import (
     User,
     AudioRecord,
+    Speaker,
     Voiceprint,
     UploadedFile,
     Transcription,
@@ -21,15 +22,32 @@ admin.site.index_title = '欢迎使用管理后台'
 
 # ============== User Admin ==============
 class UserAdmin(BaseUserAdmin):
-    list_display = ('username', 'email', 'is_staff_display', 'is_superuser_display', 'file_count', 'created_at')
+    list_display = (
+        'username',
+        'email',
+        'is_staff_display',
+        'is_superuser_display',
+        'file_count',
+        'speaker_count',
+        'voiceprint_count',
+        'created_at',
+    )
     list_filter = ('is_staff', 'is_superuser', 'created_at')
     search_fields = ('username', 'email')
     readonly_fields = ('created_at', 'updated_at')
     ordering = ('-created_at',)
     actions = ['make_staff', 'remove_staff']
     fieldsets = BaseUserAdmin.fieldsets + (
-        ('额外信息', {'fields': ('created_at', 'updated_at')}),
+        ('额外信息', {'fields': ('avatar', 'created_at', 'updated_at')}),
     )
+
+    def speaker_count(self, obj):
+        return obj.speaker_set.count()
+    speaker_count.short_description = '说话人数量'
+
+    def voiceprint_count(self, obj):
+        return obj.voiceprint_set.count()
+    voiceprint_count.short_description = '声纹总数'
 
     def file_count(self, obj):
         return obj.uploadedfile_set.count()
@@ -80,14 +98,93 @@ class AudioRecordAdmin(admin.ModelAdmin):
     file_size_display.short_description = '文件大小'
 
 
-# ============== Voiceprint Admin ==============
-@admin.register(Voiceprint)
-class VoiceprintAdmin(admin.ModelAdmin):
-    list_display = ('name', 'user', 'created_at', 'updated_at')
+# ============== Speaker Admin ==============
+class VoiceprintInline(admin.TabularInline):
+    model = Voiceprint
+    extra = 0
+    readonly_fields = ('created_at', 'updated_at', 'source_type')
+    fields = ('audio_file', 'source_type', 'source_meeting', 'created_at')
+    ordering = ('-created_at',)
+    verbose_name = '声纹'
+    verbose_name_plural = '声纹列表'
+    show_change_link = True
+
+
+@admin.register(Speaker)
+class SpeakerAdmin(admin.ModelAdmin):
+    list_display = ('name', 'user', 'avatar_display', 'voiceprint_count', 'manual_count', 'auto_count', 'created_at', 'updated_at')
+    list_display_links = ('name',)
     list_filter = ('user', 'created_at')
     search_fields = ('name', 'user__username')
     readonly_fields = ('created_at', 'updated_at')
     ordering = ('-created_at',)
+    inlines = [VoiceprintInline]
+    list_per_page = 20
+    date_hierarchy = 'created_at'
+
+    def avatar_display(self, obj):
+        if obj.avatar:
+            return '✅ 有头像'
+        return '❌ 无头像'
+    avatar_display.short_description = '头像状态'
+
+    def voiceprint_count(self, obj):
+        return obj.voiceprints.count()
+    voiceprint_count.short_description = '声纹总数'
+
+    def manual_count(self, obj):
+        return obj.voiceprints.filter(source_type='manual').count()
+    manual_count.short_description = '手动注册'
+
+    def auto_count(self, obj):
+        return obj.voiceprints.filter(source_type='auto').count()
+    auto_count.short_description = '会议自动'
+
+
+# ============== Voiceprint Admin ==============
+@admin.register(Voiceprint)
+class VoiceprintAdmin(admin.ModelAdmin):
+    list_display = ('speaker_display', 'user', 'source_type_display', 'audio_file_status', 'source_meeting_display', 'created_at')
+    list_display_links = ('speaker_display',)
+    list_filter = ('speaker', 'user', 'source_type', 'created_at')
+    search_fields = ('name', 'user__username', 'speaker__name')
+    readonly_fields = ('created_at', 'updated_at')
+    ordering = ('-created_at',)
+    list_per_page = 20
+    date_hierarchy = 'created_at'
+    list_select_related = ('speaker', 'user', 'source_meeting')
+    fieldsets = (
+        ('基本信息', {'fields': ('speaker', 'user', 'name', 'avatar')}),
+        ('声纹数据', {'fields': ('audio_file', 'file_path', 'feature')}),
+        ('来源信息', {'fields': ('source_type', 'source_meeting')}),
+        ('时间信息', {'fields': ('created_at', 'updated_at'), 'classes': ('collapse',)}),
+    )
+
+    def speaker_display(self, obj):
+        if obj.speaker:
+            return f'👤 {obj.speaker.name}'
+        return '❌ 未关联'
+    speaker_display.short_description = '说话人'
+    speaker_display.admin_order_field = 'speaker__name'
+
+    def source_type_display(self, obj):
+        if obj.source_type == 'manual':
+            return '✏️ 手动注册'
+        return '📹 会议自动'
+    source_type_display.short_description = '来源类型'
+    source_type_display.admin_order_field = 'source_type'
+
+    def audio_file_status(self, obj):
+        if obj.audio_file:
+            return '✅ 有音频'
+        return '❌ 无音频'
+    audio_file_status.short_description = '音频状态'
+
+    def source_meeting_display(self, obj):
+        if obj.source_meeting:
+            return f'📁 {obj.source_meeting.original_name[:20]}...'
+        return '-'
+    source_meeting_display.short_description = '来源会议'
 
 
 # ============== Inline Models ==============
@@ -99,7 +196,7 @@ class TranscriptionInline(admin.StackedInline):
     verbose_name_plural = '逐字稿'
     fieldsets = (
         ('逐字稿内容', {
-            'fields': ('transcription_text', 'speaker_info'),
+            'fields': ('transcription_text', 'segments'),
         }),
         ('时间信息', {
             'fields': ('created_at', 'updated_at'),
@@ -145,16 +242,32 @@ class UploadedFileAdmin(admin.ModelAdmin):
         'file_size_display',
         'status_display',
         'meeting_type',
+        'has_transcription',
+        'has_summary',
         'upload_time',
     )
-    list_filter = ('user', 'file_type', 'status', 'upload_time')
+    list_filter = ('user', 'file_type', 'status', 'upload_time', 'meeting_type')
     search_fields = ('original_name', 'meeting_type', 'user__username')
     readonly_fields = ('stored_name', 'file_path', 'upload_time')
     inlines = [TranscriptionInline, MeetingSummaryInline, MeetingSegmentInline]
     ordering = ('-upload_time',)
     list_per_page = 20
     date_hierarchy = 'upload_time'
-    actions = ['mark_as_processed', 'reset_to_original']
+    actions = ['mark_as_processed', 'reset_to_original', 'download_file']
+
+    def has_transcription(self, obj):
+        return hasattr(obj, 'transcription')
+    has_transcription.short_description = '逐字稿'
+    has_transcription.boolean = True
+
+    def has_summary(self, obj):
+        return hasattr(obj, 'meetingsummary')
+    has_summary.short_description = '会议纪要'
+    has_summary.boolean = True
+
+    @admin.action(description='下载选中的文件')
+    def download_file(self, request, queryset):
+        self.message_user(request, '下载功能需在前端实现', messages.INFO)
 
     def file_type_display(self, obj):
         if obj.file_type in ['mp4', 'avi', 'mov', 'mkv', 'flv', 'wmv'] or 'video' in obj.file_type:

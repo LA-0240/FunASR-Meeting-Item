@@ -170,22 +170,9 @@ class Transcription(models.Model):
     """转录模型"""
     file = models.OneToOneField(UploadedFile, on_delete=models.CASCADE, verbose_name="关联文件")
     transcription_text = models.TextField(verbose_name="转录文本")
-    speaker_info = models.JSONField(blank=True, null=True, verbose_name="说话人信息（已合并优化）")  # 暂时保留
-    raw_sentence_info = models.JSONField(blank=True, null=True, verbose_name="原始句子数据（未合并）")  # 暂时保留
-    segments = models.JSONField(blank=True, null=True, verbose_name="句子分段数据（新）")  # 新增统一字段
+    segments = models.JSONField(blank=True, null=True, verbose_name="句子分段数据")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
-
-    @property
-    def unified_segments(self):
-        """获取统一的分段数据（兼容新旧数据）"""
-        if self.segments:
-            return self.segments
-        if self.speaker_info:
-            return self.speaker_info
-        if self.raw_sentence_info:
-            return self.raw_sentence_info
-        return []
 
     class Meta:
         verbose_name = "转录记录"
