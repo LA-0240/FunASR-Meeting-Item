@@ -59,7 +59,7 @@
                     <div v-if="activeMenu === file.id" class="dropdown-menu" @click.stop>
                       <div class="menu-item" @click="handleRename(file)">重命名</div>
                       <div class="menu-item delete" @click="handleDelete(file.id)">删除</div>
-                      <div class="menu-item" @click="openFileLocation(file)">打开本地文件位置</div>
+
                     </div>
                   </div>
                 </div>
@@ -106,7 +106,7 @@
                         <div v-if="activeMenu === file.id" class="dropdown-menu" @click.stop>
                           <div class="menu-item" @click="handleRename(file)">重命名</div>
                           <div class="menu-item delete" @click="handleDelete(file.id)">删除</div>
-                          <div class="menu-item" @click="openFileLocation(file)">打开本地文件位置</div>
+    
                         </div>
                       </div>
                     </td>
@@ -134,7 +134,7 @@
                     <div v-if="activeMenu === file.id" class="dropdown-menu" @click.stop>
                       <div class="menu-item" @click="handleRename(file)">重命名</div>
                       <div class="menu-item delete" @click="handleDelete(file.id)">删除</div>
-                      <div class="menu-item" @click="openFileLocation(file)">打开本地文件位置</div>
+
                     </div>
                   </div>
                 </div>
@@ -181,7 +181,7 @@
                         <div v-if="activeMenu === file.id" class="dropdown-menu" @click.stop>
                           <div class="menu-item" @click="handleRename(file)">重命名</div>
                           <div class="menu-item delete" @click="handleDelete(file.id)">删除</div>
-                          <div class="menu-item" @click="openFileLocation(file)">打开本地文件位置</div>
+    
                         </div>
                       </div>
                     </td>
@@ -256,7 +256,7 @@
                       <div v-if="activeMenu === file.id" class="dropdown-menu" @click.stop>
                         <div class="menu-item" @click="handleRename(file)">重命名</div>
                         <div class="menu-item delete" @click="handleDelete(file.id)">删除</div>
-                        <div class="menu-item" @click="openFileLocation(file)">打开本地文件位置</div>
+  
                       </div>
                     </div>
                   </td>
@@ -637,13 +637,6 @@ export default {
       }
     };
 
-    // 打开本地文件位置
-    const openFileLocation = (file) => {
-      console.log('打开本地文件位置:', file);
-      // 这里需要调用后端API获取文件路径，然后打开
-      activeMenu.value = null;
-    };
-
     // 点击文件跳转至业务页面
     const handleFileClick = (file) => {
       console.log('🚀 [跳转] 点击文件，准备跳转，file:', file);
@@ -698,7 +691,6 @@ export default {
       handleRename,
       handleConfirmRename,
       handleDelete,
-      openFileLocation,
       searchFiles,
       resetSearch,
       handleFileSelect,
@@ -952,7 +944,7 @@ export default {
   align-items: center;
   justify-content: center;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .item-preview img {

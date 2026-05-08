@@ -746,10 +746,12 @@ export default {
     
     // 计算属性：获取统一的逐字稿数据（优先新字段，兼容旧字段）
     const unifiedTranscription = computed(() => {
+      // 强制依赖触发更新
+      forceStatsUpdate.value;
+      
       if (transcriptionData.value.segments?.length > 0) {
         return transcriptionData.value.segments;
-      }
-      if (transcriptionData.value.speaker_info?.length > 0) {
+      } else if (transcriptionData.value.speaker_info?.length > 0) {
         return transcriptionData.value.speaker_info;
       }
       return [];
@@ -942,19 +944,32 @@ export default {
 
     // 说话人数（去重）
     const speakerCount = computed(() => {
-      if (!unifiedTranscription.length) return 0;
+      // 强制依赖触发更新
+      forceStatsUpdate.value;
+      
+      const data = unifiedTranscription.value;
+      if (!data.length) {
+        return 0;
+      }
+      
       const speakers = new Set();
-      unifiedTranscription.forEach(item => {
+      for (const item of data) {
         if (item.speaker) {
           speakers.add(item.speaker);
+        } else if (item.spk) {
+          speakers.add(item.spk);
         }
-      });
+      }
+      
       return speakers.size;
     });
 
     // 总句子数
     const totalSentences = computed(() => {
-      return unifiedTranscription.length || 0;
+      // 强制依赖触发更新
+      forceStatsUpdate.value;
+      
+      return unifiedTranscription.value.length || 0;
     });
 
     // 格式化会议纪要内容（Markdown 渲染）
@@ -1038,18 +1053,25 @@ export default {
       }
     };
 
+    // 调试用的强制更新ref
+    const forceStatsUpdate = ref(0);
+    
     // 加载逐字稿
     const loadTranscription = async () => {
       loadingTranscription.value = true;
       transcriptionError.value = '';
       try {
         const response = await meetingApi.getTranscription(file.value.id);
+        
         if (response.status === 'success') {
-          transcriptionData.value = {
-            segments: response.segments || [],
-            speaker_info: response.speaker_info || [],
-            raw_sentence_info: response.raw_sentence_info || []
-          };
+          // 使用Vue的响应式方式更新数据
+          transcriptionData.value.segments = response.segments || [];
+          transcriptionData.value.speaker_info = response.speaker_info || [];
+          transcriptionData.value.raw_sentence_info = response.raw_sentence_info || [];
+          
+          // 强制触发统计更新
+          await nextTick();
+          forceStatsUpdate.value++;
         }
       } catch (error) {
         transcriptionError.value = '加载逐字稿失败';
@@ -1851,7 +1873,7 @@ export default {
     // 导出逐字稿
     const exportTranscriptToWord = async () => {
       try {
-        const data = unifiedTranscription;
+        const data = unifiedTranscription.value;
         if (!data.length) {
           alert('逐字稿内容为空，无法导出');
           return;

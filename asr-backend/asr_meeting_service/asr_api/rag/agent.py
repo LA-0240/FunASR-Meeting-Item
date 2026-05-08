@@ -25,12 +25,13 @@ except ImportError:
 
 class MeetingAgent:
     """会议助手Agent"""
-
+    # 初始化Agent
     def __init__(self, user_id: int, file_id: Optional[int] = None):
         self.user_id = user_id
         self.file_id = file_id
         self.chat_history = []  # 对话历史
-
+        
+    # 发送消息，获取回答
     def chat(self, user_message: str) -> Dict[str, Any]:
         """
         发送消息，获取回答
@@ -334,7 +335,8 @@ class MeetingAgent:
             "sources": sources,
             "thinking": thinking
         }
-    
+        
+    # 决定调用哪个工具
     def _decide_which_tool_to_call(self, user_message: str) -> str:
         """
         让 LLM 判断需要调用哪个工具
@@ -460,7 +462,8 @@ class MeetingAgent:
             else:
                 return "NONE"
 
-    
+    # 调用LLM进行简单决策
+    # 用于判断用户问题是否属于某个工具的场景
     def _call_llm_for_decision(self, prompt: str) -> str:
         """
         专门用于简单决策的 LLM 调用（降低成本，快速响应）
@@ -493,7 +496,9 @@ class MeetingAgent:
         except Exception as e:
             print(f"⚠️ 决策 LLM 调用失败: {e}")
             return "NO"
-    
+        
+    # 获取所有发言人的统计数据
+    # 用于 LLM 调用
     def _get_speaker_statistics(self) -> Dict[str, Any]:
         """
         【工具函数】获取所有发言人的统计数据
@@ -597,7 +602,9 @@ class MeetingAgent:
                 "status": "error",
                 "message": str(e)
             }
-    
+        
+    # 构建带统计数据的 Prompt（工具调用模式）
+    # 用于 LLM 调用
     def _build_speaker_prompt_with_stats(self, user_message: str, stats_data: Dict[str, Any]) -> str:
         """
         构建带统计数据的 Prompt（工具调用模式）
@@ -651,7 +658,9 @@ class MeetingAgent:
 请根据以上信息回答用户的问题。"""
 
         return full_prompt
-    
+        
+    # 获取完整的会议逐字稿
+    # 用于 LLM 调用
     def _get_full_transcript(self) -> Dict[str, Any]:
         """
         【工具函数】获取完整的会议逐字稿
@@ -715,7 +724,9 @@ class MeetingAgent:
                 "status": "error",
                 "message": str(e)
             }
-    
+        
+    # 构建带完整逐字稿的 Prompt
+    # 用于 LLM 调用
     def _build_transcript_prompt(self, user_message: str, transcript_data: Dict[str, Any]) -> str:
         """
         构建带完整逐字稿的 Prompt
@@ -764,7 +775,9 @@ class MeetingAgent:
 请根据以上完整逐字稿信息回答用户的问题。"""
 
         return full_prompt
-    
+        
+    # 格式化逐字稿数据
+    # 用于 LLM 调用
     def _format_transcript_to_text(self, transcript_data: Dict[str, Any]) -> str:
         """
         把逐字稿数据格式化成可读的文本
@@ -809,7 +822,9 @@ class MeetingAgent:
             lines.append(f"{text}\n")
         
         return "\n".join(lines)
-    
+        
+    # 构建带统计数据的 Prompt（工具调用模式）
+    # 用于 LLM 调用
     def _build_sources_for_speaker_stats(self, stats_data: Dict[str, Any], tool_name: str = None) -> List[Dict[str, Any]]:
         """
         为发言统计工具构建来源信息（只返回一条标识信息）
@@ -835,7 +850,9 @@ class MeetingAgent:
             })
         
         return sources
-    
+        
+    # 构建带完整逐字稿的 Prompt（工具调用模式）
+    # 用于 LLM 调用
     def _build_sources_for_full_transcript(self, transcript_data: Dict[str, Any], tool_name: str = None) -> List[Dict[str, Any]]:
         """
         为完整逐字稿工具构建来源信息（只返回一条标识信息）
@@ -862,8 +879,10 @@ class MeetingAgent:
         
         return sources
     
-    # ========== 新增四个工具 ==========
-    
+    # ========== 新增四个工具（数据查询） ==========
+        
+    # 发言人过滤工具
+    # 用于 LLM 调用
     def _get_speaker_filter(self, speaker_name: str = None) -> Dict[str, Any]:
         """
         【工具函数】SPEAKER_FILTER - 获取指定发言人的所有发言
@@ -906,7 +925,9 @@ class MeetingAgent:
                 "status": "error",
                 "message": str(e)
             }
-    
+        
+    # 时间范围查询工具
+    # 用于 LLM 调用
     def _get_time_range_query(self, start_time: float = None, end_time: float = None) -> Dict[str, Any]:
         """
         【工具函数】TIME_RANGE_QUERY - 获取指定时间范围内的对话
@@ -962,7 +983,9 @@ class MeetingAgent:
                 "status": "error",
                 "message": str(e)
             }
-    
+        
+    # 关键词搜索工具
+    # 用于 LLM 调用
     def _get_keyword_search(self, keyword: str = None) -> Dict[str, Any]:
         """
         【工具函数】KEYWORD_SEARCH - 精确关键词搜索
@@ -1007,7 +1030,9 @@ class MeetingAgent:
                 "status": "error",
                 "message": str(e)
             }
-    
+        
+    # 分段检索工具
+    # 用于 LLM 调用
     def _get_segment_retriever(self, segment_title: str = None, segment_index: int = None) -> Dict[str, Any]:
         """
         【工具函数】SEGMENT_RETRIEVER - 获取指定分段的内容
@@ -1091,8 +1116,10 @@ class MeetingAgent:
                 "message": str(e)
             }
     
-    # ========== 新增四个工具的来源构建函数 ==========
-    
+    # ========== 新增四个工具的来源构建函数（引用追踪） ==========
+        
+    # 发言人过滤工具
+    # 用于 LLM 调用
     def _build_sources_for_speaker_filter(self, filter_data: Dict[str, Any], tool_name: str = None) -> List[Dict[str, Any]]:
         """为发言人过滤工具构建来源"""
         sources = []
@@ -1107,7 +1134,9 @@ class MeetingAgent:
                 "tool_name": tool_name
             })
         return sources
-    
+        
+    # 时间范围查询工具
+    # 用于 LLM 调用
     def _build_sources_for_time_range_query(self, query_data: Dict[str, Any], tool_name: str = None) -> List[Dict[str, Any]]:
         """为时间范围查询工具构建来源"""
         sources = []
@@ -1126,7 +1155,9 @@ class MeetingAgent:
                 "tool_name": tool_name
             })
         return sources
-    
+        
+    # 关键词搜索工具
+    # 用于 LLM 调用
     def _build_sources_for_keyword_search(self, search_data: Dict[str, Any], tool_name: str = None) -> List[Dict[str, Any]]:
         """为关键词搜索工具构建来源"""
         sources = []
@@ -1141,7 +1172,9 @@ class MeetingAgent:
                 "tool_name": tool_name
             })
         return sources
-    
+        
+    # 分段检索工具
+    # 用于 LLM 调用
     def _build_sources_for_segment_retriever(self, segment_data: Dict[str, Any], tool_name: str = None) -> List[Dict[str, Any]]:
         """为分段检索工具构建来源"""
         sources = []
@@ -1157,8 +1190,10 @@ class MeetingAgent:
             })
         return sources
     
-    # ========== 新增四个工具的 Prompt 构建函数 ==========
-    
+    # ========== 新增四个工具的 Prompt 构建函数（生成回答） ==========
+        
+    # 发言人过滤工具
+    # 用于 LLM 调用
     def _build_speaker_filter_prompt(self, user_message: str, filter_data: Dict[str, Any]) -> str:
         """构建发言人过滤工具的 Prompt"""
         system_prompt = """你是一个专业的会议分析助手。根据指定发言人的完整发言内容，回答用户的问题。
@@ -1207,7 +1242,9 @@ class MeetingAgent:
 {user_message}
 
 请根据以上该发言人的发言信息回答用户的问题。"""
-    
+        
+    # 时间范围查询工具
+    # 用于 LLM 调用
     def _build_time_range_prompt(self, user_message: str, query_data: Dict[str, Any]) -> str:
         """构建时间范围查询工具的 Prompt"""
         system_prompt = """你是一个专业的会议分析助手。根据指定时间范围内的完整对话内容，回答用户的问题。
@@ -1261,7 +1298,9 @@ class MeetingAgent:
 {user_message}
 
 请根据以上该时间范围内的对话信息回答用户的问题。"""
-    
+        
+    # 关键词搜索工具
+    # 用于 LLM 调用
     def _build_keyword_search_prompt(self, user_message: str, search_data: Dict[str, Any]) -> str:
         """构建关键词搜索工具的 Prompt"""
         system_prompt = """你是一个专业的会议分析助手。根据搜索到的包含关键词的所有对话内容，回答用户的问题。
@@ -1310,7 +1349,9 @@ class MeetingAgent:
 {user_message}
 
 请根据以上搜索到的相关对话信息回答用户的问题。"""
-    
+        
+    # 分段检索工具
+    # 用于 LLM 调用
     def _build_segment_retriever_prompt(self, user_message: str, segment_data: Dict[str, Any]) -> str:
         """构建分段检索工具的 Prompt"""
         system_prompt = """你是一个专业的会议分析助手。根据指定分段的完整内容，回答用户的问题。
@@ -1365,7 +1406,9 @@ class MeetingAgent:
 {user_message}
 
 请根据以上该分段的信息回答用户的问题。"""
-    
+        
+    # 格式化统计数据
+    # 用于 LLM 调用
     def _format_stats_data_to_text(self, stats_data: Dict[str, Any]) -> str:
         """
         把结构化统计数据格式化成可读的文本
@@ -1414,7 +1457,9 @@ class MeetingAgent:
             lines.append("")
         
         return "\n".join(lines)
-
+        
+    # 构建Prompt
+    # 用于 LLM 调用
     def _build_prompt(self, user_message: str, context: str) -> str:
         """构建Prompt"""
         system_prompt = RAGConfig.AGENT_SYSTEM_PROMPT
@@ -1442,7 +1487,9 @@ class MeetingAgent:
 请根据以上信息回答用户的问题。"""
 
         return full_prompt
-
+        
+    # 调用LLM
+    # 用于 LLM 调用
     def _call_llm(self, prompt: str) -> str:
         """
         调用LLM（使用ModelScope Qwen）
@@ -1486,7 +1533,9 @@ class MeetingAgent:
             print(f"⚠️  LLM调用失败: {e}")
             print("   使用模拟模式...")
             return self._fallback_answer(prompt)
-
+        
+    # 备用回答模式
+    # 用于 LLM 调用
     def _fallback_answer(self, prompt: str) -> str:
         """
         备用回答模式（当LLM不可用时）
@@ -1506,7 +1555,9 @@ class MeetingAgent:
             return "## 待办事项\n\n根据会议记录，待办事项包括：\n\n1. **完成智能宠物项圈产品详细需求文档**\n2. **调研竞品智能项圈功能及定价策略**\n3. **制定MVP开发计划**\n\n请持续关注后续会议记录。"
         else:
             return "## 模拟模式\n\n我理解你的问题，但需要连接LLM服务才能提供完整回答。\n\n当前处于**模拟模式**，请确保ModelScope API配置正确。"
-
+        
+    # 清空对话历史
+    # 用于 LLM 调用
     def clear_history(self):
         """清空对话历史"""
         self.chat_history = []
