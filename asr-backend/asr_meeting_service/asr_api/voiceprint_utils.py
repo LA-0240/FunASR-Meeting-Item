@@ -1,3 +1,7 @@
+"""
+声纹处理工具模块
+提供声纹提取、匹配、重复检查等功能
+"""
 import numpy as np
 import torch
 import os
@@ -10,9 +14,13 @@ def extract_voiceprint_feature(audio_path, use_vad=False, vad_mode='strict'):
     """
     官方标准声纹提取
     
-    :param audio_path: 音频文件路径
-    :param use_vad: 是否启用 VAD 清洗（已禁用）
-    :param vad_mode: VAD 模式 ('strict'/'normal'/'loose')
+    Args:
+        audio_path: 音频文件路径
+        use_vad: 是否启用 VAD 清洗（已禁用）
+        vad_mode: VAD 模式 ('strict'/'normal'/'loose')
+        
+    Returns:
+        np.ndarray: 声纹特征向量，失败返回None
     """
     cleaned_path = None
     try:
@@ -57,9 +65,13 @@ def extract_voiceprint_feature(audio_path, use_vad=False, vad_mode='strict'):
 def check_voiceprint_duplicate(feature, user=None):
     """
     检查声纹是否重复
-    :param feature: 声纹特征
-    :param user: 用户对象（可选），如果提供则只检查该用户的声纹
-    :return: (是否重复, 重复的声纹名称, 最大相似度)
+    
+    Args:
+        feature: 声纹特征
+        user: 用户对象（可选），如果提供则只检查该用户的声纹
+        
+    Returns:
+        tuple: (是否重复, 重复的声纹名称, 最大相似度)
     """
     try:
         if user:
@@ -100,10 +112,14 @@ def check_voiceprint_duplicate(feature, user=None):
 def match_voiceprint(feature, user=None, speaker_count=None):
     """
     匹配声纹（支持一人多声纹）
-    :param feature: 声纹特征
-    :param user: 用户对象（可选），如果提供则只匹配该用户的声纹
-    :param speaker_count: 会议文件中的说话人数量（可选），用于动态调整阈值
-    :return: (匹配的 Speaker 对象, 最高相似度)，未匹配返回 (None, 0)
+    
+    Args:
+        feature: 声纹特征
+        user: 用户对象（可选），如果提供则只匹配该用户的声纹
+        speaker_count: 会议文件中的说话人数量（可选），用于动态调整阈值
+        
+    Returns:
+        tuple: (匹配的 Speaker 对象, 最高相似度)，未匹配返回 (None, 0)
     """
     try:
         print(f"声纹匹配用户: {user.username if user and user.is_authenticated else 'None'}")
@@ -183,14 +199,18 @@ def match_voiceprint(feature, user=None, speaker_count=None):
 def append_voiceprint(speaker, feature, user=None, audio_file=None, audio_path=None, source_meeting=None, source_type='auto'):
     """
     给说话人追加一条新声纹
-    :param speaker: Speaker 对象
-    :param feature: 声纹特征向量
-    :param user: 用户对象（可选）
-    :param audio_file: 绑定的音频文件（可选，Django File 对象）
-    :param audio_path: 音频文件路径（可选，本地文件路径）
-    :param source_meeting: 来源会议（UploadedFile 对象，可选）
-    :param source_type: 声纹来源类型（'auto' 或 'manual'，默认 'auto'）
-    :return: 创建的 Voiceprint 对象，或者如果相似度超过96%则返回 None（不添加）
+    
+    Args:
+        speaker: Speaker 对象
+        feature: 声纹特征向量
+        user: 用户对象（可选）
+        audio_file: 绑定的音频文件（可选，Django File 对象）
+        audio_path: 音频文件路径（可选，本地文件路径）
+        source_meeting: 来源会议（UploadedFile 对象，可选）
+        source_type: 声纹来源类型（'auto' 或 'manual'，默认 'auto'）
+        
+    Returns:
+        Voiceprint: 创建的 Voiceprint 对象，或者如果相似度超过96%则返回 None（不添加）
     """
     try:
         # 如果是 auto 声纹，先检查是否有已有的 auto 声纹
@@ -307,7 +327,14 @@ def append_voiceprint(speaker, feature, user=None, audio_file=None, audio_path=N
 def match_voiceprint_old(feature, user=None, speaker_count=None):
     """
     旧版声纹匹配（向后兼容）
-    :return: 匹配的名称（字符串）或 None
+    
+    Args:
+        feature: 声纹特征
+        user: 用户对象（可选）
+        speaker_count: 会议文件中的说话人数量（可选）
+        
+    Returns:
+        str: 匹配的名称（字符串）或 None
     """
     result, _ = match_voiceprint(feature, user, speaker_count)
     if isinstance(result, Speaker):

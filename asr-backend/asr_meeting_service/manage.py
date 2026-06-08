@@ -1,5 +1,8 @@
 #!/usr/bin/env python
-"""Django's command-line utility for administrative tasks."""
+"""
+Django's command-line utility for administrative tasks.
+Django管理命令行工具，用于执行各种管理任务
+"""
 import os
 import sys
 from pathlib import Path
@@ -23,7 +26,11 @@ os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
 def main():
-    """Run administrative tasks."""
+    """
+    运行管理任务
+    
+    设置Django环境并执行命令行管理任务
+    """
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "asr_meeting_service.settings")
     try:
         from django.core.management import execute_from_command_line

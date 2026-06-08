@@ -1,3 +1,7 @@
+"""
+数据模型定义模块
+包含所有数据库模型的定义和AI模型加载功能
+"""
 # models.py 最终修复版
 from django.conf import settings
 from django.db import models
@@ -11,7 +15,9 @@ asr_model = None       # 用于语音识别
 voiceprint_model = None # 专用于声纹提取
 
 def load_asr_model():
-    """加载ASR模型（仅用于识别）"""
+    """加载ASR语音识别模型
+    加载FunASR语音识别模型，用于转录音频
+    """
     global asr_model
     if asr_model is None:
         print(f"{datetime.now()} - 加载ASR识别模型...")
@@ -30,7 +36,9 @@ def load_asr_model():
             raise
 
 def load_voiceprint_model():
-    """加载纯声纹模型（官方标准用法）"""
+    """加载纯声纹识别模型
+    加载声纹提取模型，用于声纹比对和识别
+    """
     global voiceprint_model
     if voiceprint_model is None:
         print(f"{datetime.now()} - 加载纯声纹模型...")
@@ -51,6 +59,9 @@ def load_voiceprint_model():
 
 # Django启动时加载
 def ready():
+    """Django应用启动时初始化
+    加载ASR和声纹模型
+    """
     import os
     if os.environ.get('RUN_MAIN'):
         load_asr_model()
@@ -58,7 +69,9 @@ def ready():
 
 # 用户模型
 class User(AbstractUser):
-    """用户模型"""
+    """用户模型
+    扩展Django默认User模型，添加头像和时间戳字段
+    """
     email = models.EmailField(unique=True, verbose_name="邮箱")
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True, verbose_name="头像")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
@@ -70,6 +83,9 @@ class User(AbstractUser):
 
 # 原有的 AudioRecord 模型保持不变
 class AudioRecord(models.Model):
+    """音频记录模型
+    存储上传的音频文件及其转录结果
+    """
     filename = models.CharField(max_length=255, verbose_name="文件名")
     file_size = models.IntegerField(verbose_name="文件大小（字节）")
     upload_time = models.DateTimeField(auto_now_add=True, verbose_name="上传时间")
@@ -84,7 +100,9 @@ class AudioRecord(models.Model):
         return self.filename
 
 class Speaker(models.Model):
-    """说话人主表（一人一条记录）"""
+    """说话人模型
+    存储说话人的基本信息（一人一条记录）
+    """
     name = models.CharField(max_length=100, verbose_name="说话人姓名")
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="所属用户")
     avatar = models.ImageField(upload_to='speaker_avatars/', blank=True, null=True, verbose_name="头像")
@@ -101,7 +119,9 @@ class Speaker(models.Model):
 
 
 class Voiceprint(models.Model):
-    """声纹子表（一个说话人可以有多条）"""
+    """声纹模型
+    存储声纹特征和相关信息（一个说话人可以有多条声纹）
+    """
     speaker = models.ForeignKey(Speaker, on_delete=models.CASCADE, related_name='voiceprints', verbose_name="所属说话人", null=True, blank=True)
     # 保留旧字段，用于兼容（将来迁移后可以移除）
     name = models.CharField(max_length=100, blank=True, null=True, verbose_name="声纹名称（旧字段，兼容用）")
@@ -132,14 +152,34 @@ class Voiceprint(models.Model):
 
     @staticmethod
     def feature_to_binary(feature):
+        """将声纹特征数组转换为二进制数据存储
+        Args:
+            feature: 声纹特征数组
+        Returns:
+            bytes: 二进制数据
+        """
         return feature.tobytes()
 
     @staticmethod
     def binary_to_feature(binary_data):
+        """将二进制数据还原为声纹特征数组
+        Args:
+            binary_data: 二进制数据
+        Returns:
+            ndarray: 声纹特征数组
+        """
         return np.frombuffer(binary_data, dtype=np.float32)
 
     @staticmethod
     def calculate_similarity(feature1, feature2, threshold=0.85):
+        """计算两个声纹特征的相似度
+        Args:
+            feature1: 声纹特征1
+            feature2: 声纹特征2
+            threshold: 判定相似的阈值
+        Returns:
+            tuple: (相似度分数, 是否相似的布尔值)
+        """
         feature1 = feature1 / np.linalg.norm(feature1)
         feature2 = feature2 / np.linalg.norm(feature2)
         similarity = np.dot(feature1, feature2.T)
@@ -147,7 +187,9 @@ class Voiceprint(models.Model):
 
 # 上传文件模型
 class UploadedFile(models.Model):
-    """上传文件模型"""
+    """上传文件模型
+    存储用户上传的音频或视频文件信息
+    """
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="所属用户")
     original_name = models.CharField(max_length=255, verbose_name="原始文件名")
     stored_name = models.CharField(max_length=255, verbose_name="存储文件名", unique=True)
@@ -167,7 +209,9 @@ class UploadedFile(models.Model):
     
 # 转录模型
 class Transcription(models.Model):
-    """转录模型"""
+    """转录模型
+    存储音频/视频文件的语音识别结果
+    """
     file = models.OneToOneField(UploadedFile, on_delete=models.CASCADE, verbose_name="关联文件")
     transcription_text = models.TextField(verbose_name="转录文本")
     segments = models.JSONField(blank=True, null=True, verbose_name="句子分段数据")
@@ -180,7 +224,9 @@ class Transcription(models.Model):
 
 # Prompt模板模型
 class Prompt(models.Model):
-    """Prompt模板模型"""
+    """Prompt模板模型
+    存储用于生成会议纪要和摘要的Prompt模板
+    """
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, verbose_name="所属用户")
     name = models.CharField(max_length=255, verbose_name="模板名称")
     system_prompt = models.TextField(verbose_name="系统提示词")
@@ -199,7 +245,9 @@ class Prompt(models.Model):
 
 # 会议纪要模型
 class MeetingSummary(models.Model):
-    """会议纪要模型"""
+    """会议纪要模型
+    存储AI生成的会议纪要和摘要
+    """
     file = models.OneToOneField(UploadedFile, on_delete=models.CASCADE, verbose_name="关联文件")
     summary_text = models.TextField(verbose_name="纪要文本")
     abstract_text = models.TextField(blank=True, null=True, verbose_name="摘要文本")
@@ -213,7 +261,9 @@ class MeetingSummary(models.Model):
 
 # 会议分段模型
 class MeetingSegment(models.Model):
-    """会议分段时间轴核心模型"""
+    """会议分段模型
+    存储会议内容的时间轴分段信息
+    """
     file = models.ForeignKey(
         UploadedFile,
         on_delete=models.CASCADE,

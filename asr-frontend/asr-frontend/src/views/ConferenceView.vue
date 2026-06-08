@@ -1,3 +1,10 @@
+<!--
+ * @Description: 会议文件管理组件
+ * 支持音频/视频文件的上传、列表展示、搜索、重命名、删除等功能
+ * 支持网格和列表两种视图模式，视频文件自动生成缩略图
+ * @Author: Trae AI
+ * @Date: 2026
+-->
 <template>
   <div class="conference-container">
     <!-- 标签栏 -->
@@ -337,6 +344,10 @@
 </template>
 
 <script>
+/**
+ * ConferenceView 组件 - 会议文件管理
+ * 管理音频/视频文件，支持上传、列表展示、搜索、重命名、删除等功能
+ */
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { fileApi } from '../api/fileApi';
@@ -360,7 +371,11 @@ export default {
     const uploading = ref(false);
     const selectedFiles = ref([]);
 
-    // 生成视频缩略图
+    /**
+     * 生成视频缩略图
+     * @param {Object} file - 文件对象
+     * @returns {Promise<string|null>} 缩略图URL
+     */
     const generateVideoThumbnail = (file) => {
       return new Promise((resolve, reject) => {
         // 只处理视频文件
@@ -402,6 +417,10 @@ export default {
       });
     };
 
+    /**
+     * 加载文件列表
+     * @param {Object} params - 搜索参数
+     */
     const loadFiles = async (params = {}) => {
       loading.value = true;
       try {
@@ -464,7 +483,9 @@ export default {
       }
     };
 
-    // 计算属性：过滤后的视频文件
+    /**
+     * 计算属性：过滤后的视频文件
+     */
     const videoFiles = computed(() => {
       return files.value.filter(file => {
         const fileType = file.file_type;
@@ -472,7 +493,9 @@ export default {
       });
     });
 
-    // 计算属性：过滤后的音频文件
+    /**
+     * 计算属性：过滤后的音频文件
+     */
     const audioFiles = computed(() => {
       return files.value.filter(file => {
         const fileType = file.file_type;

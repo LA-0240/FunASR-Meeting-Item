@@ -1,3 +1,7 @@
+"""
+旧数据迁移脚本
+将旧字段 speaker_info / raw_sentence_info 的数据迁移到新字段 segments
+"""
 import os
 import django
 

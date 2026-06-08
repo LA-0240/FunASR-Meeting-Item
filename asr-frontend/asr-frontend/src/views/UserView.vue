@@ -1,3 +1,11 @@
+
+<!--
+ * @Description: 用户个人中心组件
+ * 包含用户信息展示、头像上传/删除、统计数据展示、
+ * 快速操作、用户信息编辑、退出登录等功能
+ * @Author: Trae AI
+ * @Date: 2026
+-->
 <template>
   <div class="user-container">
     <div class="user-card">
@@ -139,6 +147,10 @@
 </template>
 
 <script>
+/**
+ * UserView 组件 - 用户个人中心
+ * 展示用户信息、统计数据,支持头像管理、信息编辑、快速导航等功能
+ */
 import { ref, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { userApi } from '../api/userApi';
@@ -151,7 +163,9 @@ export default {
   name: 'UserView',
   setup() {
     const router = useRouter();
+    // 用户信息
     const user = ref(null);
+    // 统计数据
     const fileCount = ref(0);
     const voiceprintCount = ref(0);
     const templateCount = ref(0);
@@ -171,6 +185,11 @@ export default {
     });
     const saving = ref(false);
 
+    /**
+     * 显示Toast提示消息
+     * @param {string} msg - 提示消息内容
+     * @param {string} type - 提示类型 (success/error)
+     */
     const showToastMsg = (msg, type = 'success') => {
       console.log('🎯 显示提示弹窗:', msg, type);
       
@@ -195,11 +214,18 @@ export default {
       }, 2000);
     };
 
-    // 头像相关函数
+    /**
+     * 触发头像上传
+     * 点击隐藏的文件输入框
+     */
     const triggerAvatarUpload = () => {
       avatarInput.value?.click();
     };
 
+    /**
+     * 处理头像文件选择和上传
+     * @param {Event} e - 文件选择事件
+     */
     const handleAvatarChange = async (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -241,6 +267,9 @@ export default {
       }
     };
 
+    /**
+     * 删除用户头像
+     */
     const handleDeleteAvatar = async () => {
       if (!confirm('确定要删除头像吗？')) return;
       
@@ -261,6 +290,10 @@ export default {
       }
     };
 
+    /**
+     * 加载用户数据
+     * 包括用户信息、文件数量、声纹数量、模板数量
+     */
     const loadData = async () => {
       loading.value = true;
       try {
@@ -350,6 +383,9 @@ export default {
       }
     };
 
+    /**
+     * 退出登录
+     */
     const handleLogout = async () => {
       try {
         await userApi.logout();
@@ -361,6 +397,10 @@ export default {
       }
     };
 
+    /**
+     * 导航到指定页面
+     * @param {string} path - 路径标识 (voiceprint/template/home)
+     */
     const goTo = (path) => {
       const pathMap = {
         voiceprint: '/home/voiceprint',
@@ -370,6 +410,11 @@ export default {
       router.push(pathMap[path] || '/home');
     };
 
+    /**
+     * 格式化日期
+     * @param {string} dateStr - 日期字符串
+     * @returns {string} 格式化后的日期
+     */
     const formatDate = (dateStr) => {
       if (!dateStr) return '未知';
       const date = new Date(dateStr);
@@ -380,7 +425,9 @@ export default {
       });
     };
 
-    // 打开编辑弹窗
+    /**
+     * 打开编辑用户信息弹窗
+     */
     const openEditModal = () => {
       editForm.value = {
         username: user.value?.username || '',
@@ -391,7 +438,9 @@ export default {
       showEditModal.value = true;
     };
 
-    // 关闭编辑弹窗
+    /**
+     * 关闭编辑用户信息弹窗
+     */
     const closeEditModal = () => {
       showEditModal.value = false;
       editForm.value = {
@@ -402,7 +451,10 @@ export default {
       };
     };
 
-    // 保存用户信息
+    /**
+     * 保存用户信息
+     * 验证表单并调用更新API
+     */
     const handleSave = async () => {
       // 验证密码
       if (editForm.value.password && editForm.value.password !== editForm.value.confirmPassword) {
@@ -448,6 +500,9 @@ export default {
       }
     };
 
+    /**
+     * 组件挂载时加载数据
+     */
     onMounted(() => {
       loadData();
     });

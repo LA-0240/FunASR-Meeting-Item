@@ -1,6 +1,9 @@
 """
 URL configuration for asr_meeting_service project.
 
+ASR会议服务项目的URL路由配置文件
+定义了项目的URL路由规则，包括管理后台和ASR API路由
+
 The `urlpatterns` list routes URLs to views. For more information please see:
     https://docs.djangoproject.com/en/6.0/topics/http/urls/
 Examples:
@@ -22,7 +25,9 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
+# URL路由配置列表
 urlpatterns = [
+    # Django管理后台路由
     path('admin/', admin.site.urls),
     # 包含 asr_api子模块的路由
     path('', include('asr_api.urls')),
@@ -30,6 +35,7 @@ urlpatterns = [
 
 # 开发环境下服务媒体文件
 if settings.DEBUG:
+    # 添加媒体文件URL路由
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     # 也服务旧的 voiceprints 目录
     urlpatterns += static('/voiceprints/', document_root=os.path.join(settings.BASE_DIR, 'voiceprints'))

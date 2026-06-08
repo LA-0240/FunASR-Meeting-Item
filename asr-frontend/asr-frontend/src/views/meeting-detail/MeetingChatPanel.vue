@@ -1,11 +1,13 @@
 <template>
   <div class="meeting-chat-panel">
+    <!-- 聊天头部 -->
     <div class="chat-header">
       <div class="header-title">
         <span class="icon">🤖</span>
         <span>智能会议助手</span>
       </div>
       <div class="header-actions">
+        <!-- 索引文件按钮 -->
         <button 
           class="index-btn" 
           @click="handleIndexFile" 
@@ -14,6 +16,7 @@
         >
           {{ indexing ? '索引中...' : '索引文件' }}
         </button>
+        <!-- 清空历史按钮 -->
         <button 
           class="clear-btn" 
           @click="clearHistory"
@@ -35,6 +38,7 @@
 
     <!-- 聊天消息区域 -->
     <div class="chat-messages" ref="messagesContainer">
+      <!-- 空状态提示 -->
       <div v-if="messages.length === 0" class="empty-state">
         <div class="empty-icon">💬</div>
         <div class="empty-text">
@@ -45,6 +49,7 @@
           - 回答相关问题
         </div>
       </div>
+      <!-- 消息列表 -->
       <div 
         v-for="(msg, idx) in messages" 
         :key="idx"
@@ -56,10 +61,12 @@
           <span v-else>🤖</span>
         </div>
         <div class="message-content">
+          <!-- 用户消息 -->
           <div 
             v-if="msg.role === 'user'" 
             class="message-text"
           >{{ msg.content }}</div>
+          <!-- 助手消息（支持 Markdown） -->
           <div 
             v-else 
             class="message-text markdown-body"
@@ -85,7 +92,7 @@
         </div>
       </div>
 
-      <!-- 加载中提示 -->
+      <!-- 加载中提示（打字动画） -->
       <div v-if="loading" class="message-item assistant-message">
         <div class="message-avatar"><span>🤖</span></div>
         <div class="message-content">
@@ -99,6 +106,7 @@
     <!-- 输入区域 -->
     <div class="chat-input-area">
       <div class="input-wrapper">
+        <!-- 文本输入框 -->
         <textarea
           v-model="inputText"
           class="chat-input"
@@ -107,6 +115,7 @@
           @keydown.enter.prevent="handleSend"
           @input="autoResize"
         ></textarea>
+        <!-- 发送按钮 -->
         <button 
           class="send-btn" 
           @click="handleSend"
@@ -121,6 +130,26 @@
 </template>
 
 <script>
+/**
+ * 智能会议助手聊天面板组件
+ * 
+ * 基于 RAG 技术的会议内容问答系统，支持文件索引、智能对话、来源引用等功能
+ * 
+ * 功能特点：
+ * - 文件索引管理：自动索引或手动触发索引
+ * - 智能对话：与会议内容进行自然语言问答
+ * - Markdown 渲染：支持富文本回答展示
+ * - 来源引用：显示答案的参考来源（逐字稿、分段、工具调用等）
+ * - 本地存储：保存聊天历史
+ * - 索引状态轮询：异步索引进度监听
+ * 
+ * @component
+ * @example
+ * <MeetingChatPanel 
+ *   :fileId="currentFileId" 
+ *   :userId="currentUserId" 
+ * />
+ */
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { ragApi } from '../../api/ragApi';
 import { marked } from 'marked';
@@ -128,25 +157,39 @@ import { marked } from 'marked';
 export default {
   name: 'MeetingChatPanel',
   props: {
+    /**
+     * 会议文件 ID
+     */
     fileId: {
       type: [Number, String],
       required: true
     },
+    /**
+     * 当前用户 ID（用于本地存储区分不同用户）
+     */
     userId: {
       type: [Number, String],
       default: null
     }
   },
   setup(props) {
-    const messages = ref([]);
-    const inputText = ref('');
-    const loading = ref(false);
-    const indexing = ref(false);
-    const isIndexed = ref(false);
-    const showIndexSuccess = ref(false);
-    const messagesContainer = ref(null);
+    // ===== 响应式数据 =====
+    const messages = ref([]);          // 聊天消息列表
+    const inputText = ref('');         // 输入框文本
+    const loading = ref(false);        // 发送中状态
+    const indexing = ref(false);       // 索引中状态
+    const isIndexed = ref(false);      // 是否已索引
+    const showIndexSuccess = ref(false); // 显示索引成功提示
+    const messagesContainer = ref(null); // 消息容器引用
 
-    // 渲染 Markdown
+    // ===== Markdown 渲染 =====
+    /**
+     * 将 Markdown 文本渲染为 HTML
+     * 支持表格、代码块、列表等标准 Markdown 语法
+     * 
+     * @param {string} content - Markdown 文本
+     * @returns {string} 渲染后的 HTML 字符串
+     */
     const renderMarkdown = (content) => {
       if (!content) return '';
       try {
@@ -166,12 +209,21 @@ export default {
       }
     };
 
-    // 本地存储 key
+    // ===== 本地存储 =====
+    /**
+     * 生成本地存储的 key
+     * 包含用户 ID 和文件 ID，确保不同用户和文件的历史独立
+     * 
+     * @returns {string} 本地存储 key
+     */
     const getStorageKey = () => {
       return `meeting_chat_${props.userId || 'unknown'}_${props.fileId}`;
     };
 
-    // 从本地存储加载历史
+    /**
+     * 从本地存储加载聊天历史
+     * 加载完成后自动滚动到底部
+     */
     const loadHistory = () => {
       try {
         const stored = localStorage.getItem(getStorageKey());
@@ -187,7 +239,9 @@ export default {
       }
     };
 
-    // 保存历史到本地存储
+    /**
+     * 保存聊天历史到本地存储
+     */
     const saveHistory = () => {
       try {
         localStorage.setItem(getStorageKey(), JSON.stringify(messages.value));
@@ -196,7 +250,10 @@ export default {
       }
     };
 
-    // 清空历史
+    /**
+     * 清空聊天历史
+     * 需要用户确认后才会执行
+     */
     const clearHistory = () => {
       if (confirm('确定要清空聊天历史吗？')) {
         messages.value = [];
@@ -204,10 +261,16 @@ export default {
       }
     };
 
-    // 轮询状态计时器
-    let statusPollTimer = null;
+    // ===== 索引状态管理 =====
+    let statusPollTimer = null; // 轮询计时器
     
-    // 开始轮询索引状态
+    /**
+     * 开始轮询索引状态
+     * 每1秒检查一次索引状态，直到完成或出错
+     * 
+     * @param {(string|number)} fileId - 文件 ID
+     * @param {boolean} [showMessage=true] - 是否显示系统消息
+     */
     const startPollIndexStatus = (fileId, showMessage = true) => {
       // 清除之前的计时器
       if (statusPollTimer) {
@@ -252,7 +315,10 @@ export default {
       }, 1000);
     };
     
-    // 检查文件并自动索引（每次进入时都重新索引，确保数据最新）
+    /**
+     * 检查文件并自动索引
+     * 每次进入时都重新索引，确保数据最新
+     */
     const checkIndexStatus = async () => {
       try {
         const fileIdNum = Number(props.fileId);
@@ -269,8 +335,16 @@ export default {
       }
     };
 
-    // 索引文件（异步）
-    let indexPromise = null;  // 用于防抖，防止重复请求
+    // ===== 索引文件 =====
+    let indexPromise = null; // 用于防抖，防止重复请求
+    
+    /**
+     * 触发文件索引（支持异步）
+     * 有防抖机制，防止重复请求
+     * 
+     * @param {boolean} [showMessage=true] - 是否显示系统消息
+     * @returns {Promise} 索引请求 Promise
+     */
     const handleIndexFile = async (showMessage = true) => {
       if (indexing.value || indexPromise) {
         console.log('⚠️ 索引请求已在进行中，跳过重复请求');
@@ -350,7 +424,12 @@ export default {
       }
     };
 
-    // 添加系统消息
+    // ===== 消息管理 =====
+    /**
+     * 添加系统消息到聊天记录
+     * 
+     * @param {string} content - 消息内容
+     */
     const addSystemMessage = (content) => {
       messages.value.push({
         role: 'assistant',
@@ -362,7 +441,11 @@ export default {
       nextTick(scrollToBottom);
     };
 
-    // 发送消息
+    // ===== 发送消息 =====
+    /**
+     * 发送用户消息并获取助手回复
+     * 包含用户消息、请求后端、处理响应等完整流程
+     */
     const handleSend = async () => {
       const text = inputText.value.trim();
       if (!text || loading.value) return;
@@ -432,27 +515,45 @@ export default {
       }
     };
 
-    // 滚动到底部
+    // ===== 工具函数 =====
+    /**
+     * 滚动消息容器到底部
+     */
     const scrollToBottom = () => {
       if (messagesContainer.value) {
         messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
       }
     };
 
-    // 自动调整输入框高度
-    const autoResize = (e) => {
-      const textarea = e.target;
+    /**
+     * 自动调整输入框高度
+     * 根据内容自动调整，最大高度 120px
+     * 
+     * @param {Event} event - 输入事件
+     */
+    const autoResize = (event) => {
+      const textarea = event.target;
       textarea.style.height = 'auto';
       textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
     };
 
-    // 格式化时间
+    /**
+     * 格式化时间戳为本地时间字符串（仅显示时分）
+     * 
+     * @param {number} timestamp - 时间戳（毫秒）
+     * @returns {string} 格式化的时间字符串，例如 "09:30"
+     */
     const formatTime = (timestamp) => {
       const date = new Date(timestamp);
       return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
     };
 
-    // 格式化秒数为 00:00 格式
+    /**
+     * 格式化秒数为 MM:SS 格式
+     * 
+     * @param {number} seconds - 秒数
+     * @returns {string} 格式化的时间字符串，例如 "01:30"
+     */
     const formatSeconds = (seconds) => {
       if (!seconds) return '';
       const mins = Math.floor(seconds / 60);
@@ -460,7 +561,13 @@ export default {
       return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
-    // 格式化来源类型
+    /**
+     * 格式化来源类型显示
+     * 根据来源数据类型返回友好的标签
+     * 
+     * @param {Object} src - 来源对象
+     * @returns {string} 格式化的来源类型标签
+     */
     const formatSourceType = (src) => {
       const dataType = src.data_type;
       if (dataType === 'tool_call') {
@@ -521,6 +628,7 @@ export default {
       }
     };
 
+    // ===== 生命周期钩子 =====
     // 监听 fileId 变化，重新加载历史
     watch(() => props.fileId, () => {
       loadHistory();
@@ -535,6 +643,7 @@ export default {
       }
     });
 
+    // 返回给模板使用
     return {
       messages,
       inputText,

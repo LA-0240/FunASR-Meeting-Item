@@ -1,6 +1,9 @@
 <template>
+  <!-- 结果遮罩层：点击遮罩层关闭弹窗 -->
   <div v-if="show" class="modal-overlay" @click.self="$emit('close')">
+    <!-- 结果弹窗内容 -->
     <div class="modal-content result-modal">
+      <!-- 结果图标：成功或失败 -->
       <div class="result-icon" :class="type">{{ type === 'success' ? '✓' : '✗' }}</div>
       <h3>{{ type === 'success' ? '操作成功' : '操作失败' }}</h3>
       <p>{{ message }}</p>
@@ -12,17 +15,57 @@
 </template>
 
 <script>
+/**
+ * 操作结果弹窗组件
+ * 
+ * 会议详情页的操作结果提示组件
+ * 用于展示操作的成功或失败状态
+ * 
+ * 功能特点：
+ * - 支持成功和失败两种状态
+ * - 显示对应的图标和标题
+ * - 可自定义提示消息
+ * - 点击确定按钮关闭
+ *
+ * @component
+ * @example
+ * <ResultModal 
+ *   :show="showResult" 
+ *   type="success" 
+ *   message="保存成功！" 
+ *   @close="showResult = false" 
+ * />
+ */
 export default {
   name: 'ResultModal',
   props: {
+    /**
+     * 控制弹窗显示/隐藏
+     * 
+     * @type {Boolean}
+     * @default false
+     */
     show: {
       type: Boolean,
       default: false
     },
+    /**
+     * 结果类型：成功或失败
+     * 
+     * @type {String}
+     * @default 'success'
+     * @values 'success' | 'error'
+     */
     type: {
       type: String,
       default: 'success'
     },
+    /**
+     * 提示消息内容
+     * 
+     * @type {String}
+     * @default ''
+     */
     message: {
       type: String,
       default: ''

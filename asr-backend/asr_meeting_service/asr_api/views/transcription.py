@@ -1,3 +1,7 @@
+"""
+逐字稿管理视图模块
+提供逐字稿搜索、获取、编辑、生成等功能
+"""
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -15,9 +19,18 @@ import os
 # ------------------- 逐字稿搜索接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class TranscriptionSearchView(APIView):
+    """逐字稿搜索视图：在逐字稿中搜索关键词"""
     @method_decorator(require_auth)
     def post(self, request):
-        """逐字稿搜索接口"""
+        """
+        逐字稿搜索接口
+        
+        Args:
+            request: HTTP请求对象，包含文件ID和搜索关键词
+            
+        Returns:
+            Response: 包含匹配结果的响应
+        """
         try:
             # 1. 提取请求参数
             file_id = request.data.get("file_id")
@@ -107,9 +120,19 @@ class TranscriptionSearchView(APIView):
 # ------------------- 获取逐字稿接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class TranscriptionGetView(APIView):
+    """获取逐字稿视图：获取指定文件的完整逐字稿"""
     @method_decorator(require_auth)
     def get(self, request, file_id):
-        """获取指定文件的逐字稿"""
+        """
+        获取指定文件的逐字稿
+        
+        Args:
+            request: HTTP请求对象
+            file_id: 文件ID
+            
+        Returns:
+            Response: 包含逐字稿数据的响应
+        """
         try:
             # 1. 检查文件是否存在且属于当前用户
             try:
@@ -170,9 +193,18 @@ class TranscriptionGetView(APIView):
 # ------------------- 编辑逐字稿接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class TranscriptionEditView(APIView):
+    """编辑逐字稿视图：编辑逐字稿中的句子或说话人"""
     @method_decorator(require_auth)
     def put(self, request):
-        """编辑逐字稿指定句子"""
+        """
+        编辑逐字稿指定句子
+        
+        Args:
+            request: HTTP请求对象，包含文件ID、句子索引、新内容等
+            
+        Returns:
+            Response: 编辑结果
+        """
         try:
             # 1. 提取请求参数
             file_id = request.data.get("file_id")
@@ -281,9 +313,18 @@ class TranscriptionEditView(APIView):
 # ------------------- 生成逐字稿接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class TranscriptionGenerateView(APIView):
+    """生成逐字稿视图：为已有文件生成或重新生成逐字稿"""
     @method_decorator(require_auth)
     def post(self, request):
-        """为指定文件生成逐字稿"""
+        """
+        为指定文件生成逐字稿
+        
+        Args:
+            request: HTTP请求对象，包含文件ID和是否强制重新生成
+            
+        Returns:
+            Response: 生成的逐字稿数据
+        """
         try:
             # 1. 提取请求参数
             file_id = request.data.get("file_id")

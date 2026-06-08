@@ -1,3 +1,10 @@
+
+<!--
+ * @Description: 声纹库管理组件
+ * 包含说话人管理、声纹管理、声纹播放、搜索等功能
+ * @Author: Trae AI
+ * @Date: 2026
+-->
 <template>
   <div class="voiceprint-container" ref="containerRef">
     <!-- 顶部标签栏 -->
@@ -276,6 +283,10 @@
 </template>
 
 <script>
+/**
+ * VoiceprintView 组件 - 声纹库管理
+ * 管理说话人信息和声纹数据,支持添加、编辑、删除、播放等功能
+ */
 import { ref, onMounted, onUnmounted } from 'vue';
 import { speakerApi } from '../api/speakerApi';
 
@@ -284,6 +295,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000
 export default {
   name: 'VoiceprintView',
   setup() {
+    // 说话人列表和选中状态
     const speakers = ref([]);
     const selectedSpeaker = ref(null);
     const searchKeyword = ref('');
@@ -323,14 +335,21 @@ export default {
     const addVoiceprintFileInput = ref(null);
     const updateVoiceprintFileInput = ref(null);
 
-    // 格式化日期
+    /**
+     * 格式化日期时间
+     * @param {string} dateStr - 日期字符串
+     * @returns {string} 格式化后的日期时间
+     */
     const formatDate = (dateStr) => {
       if (!dateStr) return '';
       const date = new Date(dateStr);
       return date.toLocaleString('zh-CN');
     };
 
-    // 加载 Speaker 列表
+    /**
+     * 加载说话人列表
+     * 支持关键词搜索,兼容多种API响应格式
+     */
     const loadSpeakers = async () => {
       loading.value = true;
       try {
@@ -356,17 +375,27 @@ export default {
       }
     };
 
-    // 搜索处理
+    /**
+     * 搜索处理
+     * 根据关键词重新加载说话人列表
+     */
     const handleSearch = async () => {
       await loadSpeakers();
     };
 
-    // 选择 Speaker
+    /**
+     * 选择说话人
+     * @param {Object} sp - 说话人对象
+     */
     const handleSelectSpeaker = (sp) => {
       selectedSpeaker.value = { ...sp };
     };
 
-    // 判断是否是第一条 manual 声纹
+    /**
+     * 判断是否是第一条手动注册的声纹
+     * @param {Object} vp - 声纹对象
+     * @returns {boolean} 是否是第一条手动声纹
+     */
     const isFirstManualVoiceprint = (vp) => {
       if (!selectedSpeaker.value || selectedSpeaker.value.voiceprints.length === 0) return false;
       const manualVoiceprints = selectedSpeaker.value.voiceprints
@@ -376,7 +405,10 @@ export default {
       return manualVoiceprints[0].id === vp.id;
     };
 
-    // 添加 Speaker
+    /**
+     * 添加说话人
+     * 检测相似说话人并提示,支持强制创建
+     */
     const handleAddSpeaker = async () => {
       if (!newSpeaker.value.name) {
         alert('请填写说话人姓名');
@@ -402,7 +434,10 @@ export default {
       }
     };
 
-    // 强制创建 Speaker
+    /**
+     * 强制创建说话人
+     * 忽略相似说话人警告,直接创建
+     */
     const handleForceCreateSpeaker = async () => {
       addSpeakerLoading.value = true;
       try {
@@ -419,13 +454,18 @@ export default {
       }
     };
 
-    // 重置相似警告
+    /**
+     * 重置相似警告状态
+     */
     const resetSimilarWarning = () => {
       similarSpeaker.value = null;
       pendingNewSpeaker.value = null;
     };
 
-    // 选择上传 Speaker 的第一个声纹
+    /**
+     * 选择添加说话人时的声纹文件
+     * @param {Event} e - 文件选择事件
+     */
     const handleAddSpeakerFileSelect = (e) => {
       const file = e.target.files[0];
       if (file) {
@@ -433,7 +473,10 @@ export default {
       }
     };
 
-    // 选择修改 Speaker 的头像
+    /**
+     * 选择修改说话人时的头像文件
+     * @param {Event} e - 文件选择事件
+     */
     const handleEditSpeakerAvatarSelect = (e) => {
       const file = e.target.files[0];
       if (file) {
@@ -441,13 +484,18 @@ export default {
       }
     };
 
-    // 显示修改 Speaker 模态框
+    /**
+     * 显示修改说话人模态框
+     */
     const showEditSpeakerModalHandler = () => {
       editingSpeaker.value = { name: selectedSpeaker.value.name, avatar: null };
       showEditSpeakerModal.value = true;
     };
 
-    // 修改 Speaker
+    /**
+     * 修改说话人信息
+     * 支持修改姓名和头像
+     */
     const handleEditSpeaker = async () => {
       console.log('[DEBUG] 开始修改 Speaker...');
       console.log('[DEBUG] editingSpeaker.value:', editingSpeaker.value);
@@ -488,7 +536,10 @@ export default {
       }
     };
 
-    // 删除 Speaker
+    /**
+     * 删除说话人
+     * 会同时删除该说话人的所有声纹
+     */
     const handleDeleteSpeaker = async () => {
       if (!confirm(`确定要删除说话人「${selectedSpeaker.value.name}」吗？这会同时删除该说话人的所有声纹！`)) {
         return;
@@ -503,7 +554,10 @@ export default {
       }
     };
 
-    // 追加声纹
+    /**
+     * 选择追加声纹的文件
+     * @param {Event} e - 文件选择事件
+     */
     const handleAddVoiceprintFileSelect = (e) => {
       const file = e.target.files[0];
       if (file) {
@@ -511,6 +565,9 @@ export default {
       }
     };
 
+    /**
+     * 为说话人追加声纹
+     */
     const handleAddVoiceprint = async () => {
       if (!newVoiceprint.value.file) {
         alert('请上传音频文件');
@@ -534,12 +591,19 @@ export default {
       }
     };
 
-    // 更新声纹
+    /**
+     * 显示更新声纹模态框
+     * @param {Object} vp - 要更新的声纹对象
+     */
     const showUpdateVoiceprintModalHandler = (vp) => {
       updatingVoiceprint.value = { id: vp.id, file: null };
       showUpdateVoiceprintModal.value = true;
     };
 
+    /**
+     * 选择更新声纹的文件
+     * @param {Event} e - 文件选择事件
+     */
     const handleUpdateVoiceprintFileSelect = (e) => {
       const file = e.target.files[0];
       if (file) {
@@ -547,6 +611,10 @@ export default {
       }
     };
 
+    /**
+     * 更新声纹
+     * 替换原有的声纹文件
+     */
     const handleUpdateVoiceprint = async () => {
       console.log('[DEBUG] 开始更新声纹...');
       console.log('[DEBUG] updatingVoiceprint.value:', updatingVoiceprint.value);
@@ -575,7 +643,11 @@ export default {
       }
     };
 
-    // 删除声纹
+    /**
+     * 删除声纹
+     * 第一条手动声纹不可删除
+     * @param {Object} vp - 要删除的声纹对象
+     */
     const handleDeleteVoiceprint = async (vp) => {
       console.log('[DEBUG] 开始删除声纹...');
       console.log('[DEBUG] 要删除的声纹:', vp);
@@ -602,7 +674,10 @@ export default {
       }
     };
 
-    // 播放/停止声纹音频
+    /**
+     * 切换声纹播放状态
+     * @param {Object} vp - 声纹对象
+     */
     const handleTogglePlayVoiceprint = (vp) => {
       if (playingVoiceprint.value?.id === vp.id) {
         stopPlayback();
@@ -611,6 +686,10 @@ export default {
       }
     };
 
+    /**
+     * 播放声纹音频
+     * @param {Object} vp - 声纹对象
+     */
     const playVoiceprintAudio = async (vp) => {
       stopPlayback();
       
@@ -645,6 +724,9 @@ export default {
       }
     };
 
+    /**
+     * 停止音频播放
+     */
     const stopPlayback = () => {
       if (audioElement.value) {
         audioElement.value.pause();
@@ -654,7 +736,11 @@ export default {
       playingVoiceprint.value = null;
     };
 
-    // 全局点击监听器 - 点击任何声纹卡片外的地方都停止播放
+    /**
+     * 全局点击监听器
+     * 点击声纹卡片外的地方停止播放
+     * @param {Event} event - 点击事件
+     */
     const handleOutsideClick = (event) => {
       if (!playingVoiceprint.value) return;
       
@@ -664,11 +750,19 @@ export default {
       }
     };
 
+    /**
+     * 组件挂载时初始化
+     * 加载数据并注册事件监听器
+     */
     onMounted(() => {
       loadSpeakers();
       document.addEventListener('click', handleOutsideClick);
     });
 
+    /**
+     * 组件卸载时清理
+     * 停止播放并移除事件监听器
+     */
     onUnmounted(() => {
       stopPlayback();
       document.removeEventListener('click', handleOutsideClick);

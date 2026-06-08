@@ -1,6 +1,37 @@
 # ==========================================
 # 检索器 - 带Reranker版本
 # ==========================================
+"""
+会议记录检索器模块
+===================
+
+本模块实现了向量检索和重排的完整流程，为RAG系统提供高质量的相关文档检索。
+
+主要功能：
+    - 向量检索：使用Embedding进行相似度初筛
+    - 重排序：使用Reranker对初筛结果进行精细排序
+    - 结果格式化：将检索结果格式化为LLM可读的上下文
+
+检索流程：
+    1. 用户查询向量化
+    2. 向量数据库相似度搜索（初筛）
+    3. Reranker重排序（可选，默认禁用）
+    4. 返回Top K结果
+
+核心类：
+    Retriever: 会议记录检索器类
+
+使用方式：
+    from asr_api.rag import Retriever
+    # 搜索相关内容
+    results = Retriever.search("会议的主要议题", file_id=1)
+    # 格式化为上下文
+    context = Retriever.format_context(results)
+
+注意事项：
+    - 默认禁用Reranker以提高性能和兼容性
+    - 可在配置中启用USE_RERANKER使用重排序功能
+"""
 import os
 from pathlib import Path
 from typing import List, Dict, Any, Optional
@@ -25,13 +56,33 @@ from .vector_store import VectorStore
 
 
 class Retriever:
-    """会议记录检索器"""
+    """
+    会议记录检索器类
+    
+    负责执行完整的检索流程，包括向量初筛和可选的Reranker重排。
+    同时提供结果格式化功能，便于LLM使用。
+    
+    核心特性：
+        - 支持按文件和用户过滤
+        - 可选的Reranker重排序（默认禁用）
+        - 灵活的结果格式化
+    
+    Attributes:
+        _reranker: Reranker模型实例（懒加载）
+    """
 
     _reranker = None
 
     @classmethod
     def _load_reranker(cls):
-        """加载重排器（懒加载）"""
+        """
+        加载Reranker模型（懒加载）
+        
+        仅在USE_RERANKER配置为True且首次调用时加载模型。
+        如果加载失败，会自动禁用重排功能。
+        
+        注意：目前默认禁用，加载失败不影响主流程。
+        """
         if cls._reranker is None and RAGConfig.USE_RERANKER:
             print(f"📥 正在加载Reranker: {RAGConfig.RERANKER_MODEL_NAME}...")
             try:
@@ -51,14 +102,16 @@ class Retriever:
     @classmethod
     def _rerank(cls, query: str, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        使用Reranker重排
-
+        使用Reranker进行重排序
+        
+        对向量检索的初筛结果进行精细排序，提高检索质量。
+        
         Args:
             query: 查询文本
-            results: 初筛结果
+            results: 向量检索的初筛结果列表
 
         Returns:
-            重排后的结果
+            List[Dict[str, Any]]: 重排序后的结果列表（Top K）
         """
         if not RAGConfig.USE_RERANKER or not results:
             return results[:RAGConfig.RERANKER_TOP_K]
@@ -97,15 +150,27 @@ class Retriever:
         user_id: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
-        完整检索流程：向量检索 → Reranker
-
+        完整检索流程：向量检索 → (可选) Reranker重排
+        
+        执行完整的检索流程，先进行向量相似度搜索初筛，
+        再（可选）使用Reranker进行精细重排。
+        
         Args:
             query: 查询文本
-            file_id: 按文件过滤
-            user_id: 按用户过滤
+            file_id: 按文件ID过滤（可选）
+            user_id: 按用户ID过滤（可选）
 
         Returns:
-            最终检索结果
+            List[Dict[str, Any]]: 检索结果列表，每个结果包含：
+                - id: 文档ID
+                - document: 文档内容
+                - metadata: 元数据
+                - similarity: 相似度分数（或rerank_score）
+                
+        Examples:
+            >>> results = Retriever.search("会议决议", file_id=1)
+            >>> for r in results:
+            ...     print(r["similarity"], r["document"])
         """
         print(f"🔍 检索: {query[:50]}...")
 
@@ -131,13 +196,22 @@ class Retriever:
     @classmethod
     def format_context(cls, results: List[Dict[str, Any]]) -> str:
         """
-        格式化检索结果为上下文字符串
-
+        格式化检索结果为LLM可读的上下文文本
+        
+        将检索结果列表格式化为结构化的文本，包含来源信息和内容，
+        便于LLM理解和使用。
+        
         Args:
-            results: 检索结果
+            results: 检索结果列表
 
         Returns:
-            格式化的上下文文本
+            str: 格式化后的上下文文本
+            
+        Examples:
+            >>> context = Retriever.format_context(results)
+            >>> print(context)
+            [逐字稿 00:00-01:30 (相关度: 0.892)]
+            会议内容...
         """
         if not results:
             return ""
@@ -186,7 +260,19 @@ class Retriever:
 
     @staticmethod
     def _format_time(seconds: float) -> str:
-        """格式化秒数为 MM:SS 格式"""
+        """
+        格式化秒数为 MM:SS 时间格式
+        
+        Args:
+            seconds: 秒数
+
+        Returns:
+            str: MM:SS格式的时间字符串
+            
+        Examples:
+            >>> Retriever._format_time(90)
+            '01:30'
+        """
         minutes = int(seconds // 60)
         secs = int(seconds % 60)
         return f"{minutes:02d}:{secs:02d}"

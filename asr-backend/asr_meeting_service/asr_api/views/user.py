@@ -1,3 +1,7 @@
+"""
+用户管理视图模块
+提供用户注册、登录、退出、信息管理和头像管理等功能
+"""
 from django.contrib.auth import authenticate, login, logout
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -15,8 +19,17 @@ from datetime import datetime
 # ------------------- 用户注册接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class UserRegisterView(APIView):
+    """用户注册视图：创建新用户账号"""
     def post(self, request):
-        """用户注册"""
+        """
+        用户注册
+        
+        Args:
+            request: HTTP请求对象，包含用户名、邮箱和密码
+            
+        Returns:
+            Response: 注册结果和用户信息
+        """
         try:
             username = request.data.get("username", "").strip()
             email = request.data.get("email", "").strip()
@@ -73,8 +86,17 @@ class UserRegisterView(APIView):
 # ------------------- 用户登录接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class UserLoginView(APIView):
+    """用户登录视图：验证用户身份并返回认证令牌"""
     def post(self, request):
-        """用户登录"""
+        """
+        用户登录
+        
+        Args:
+            request: HTTP请求对象，包含用户名和密码
+            
+        Returns:
+            Response: 登录结果和用户信息
+        """
         try:
             username = request.data.get("username", "").strip()
             password = request.data.get("password", "").strip()
@@ -117,9 +139,18 @@ class UserLoginView(APIView):
 # ------------------- 用户退出接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class UserLogoutView(APIView):
+    """用户退出视图：销毁用户会话"""
     @method_decorator(require_auth)
     def post(self, request):
-        """用户退出"""
+        """
+        用户退出
+        
+        Args:
+            request: HTTP请求对象
+            
+        Returns:
+            Response: 退出结果
+        """
         try:
             # 删除用户令牌
             request.user.auth_token.delete()
@@ -139,9 +170,18 @@ class UserLogoutView(APIView):
 # ------------------- 用户信息接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class UserProfileView(APIView):
+    """用户信息视图：获取和更新用户基本信息"""
     @method_decorator(require_auth)
     def get(self, request):
-        """获取用户信息"""
+        """
+        获取用户信息
+        
+        Args:
+            request: HTTP请求对象
+            
+        Returns:
+            Response: 用户信息
+        """
         try:
             user = request.user
             
@@ -165,7 +205,15 @@ class UserProfileView(APIView):
     
     @method_decorator(require_auth)
     def put(self, request):
-        """更新用户信息"""
+        """
+        更新用户信息
+        
+        Args:
+            request: HTTP请求对象，包含要更新的字段
+            
+        Returns:
+            Response: 更新结果
+        """
         try:
             user = request.user
             
@@ -241,9 +289,18 @@ class UserProfileView(APIView):
 # ------------------- 头像上传接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class UserAvatarUploadView(APIView):
+    """用户头像上传视图：上传并更新用户头像"""
     @method_decorator(require_auth)
     def post(self, request):
-        """上传用户头像"""
+        """
+        上传用户头像
+        
+        Args:
+            request: HTTP请求对象，包含头像文件
+            
+        Returns:
+            Response: 上传结果
+        """
         try:
             user = request.user
             
@@ -304,9 +361,18 @@ class UserAvatarUploadView(APIView):
 # ------------------- 删除头像接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class UserAvatarDeleteView(APIView):
+    """删除用户头像视图：删除用户的头像"""
     @method_decorator(require_auth)
     def delete(self, request):
-        """删除用户头像"""
+        """
+        删除用户头像
+        
+        Args:
+            request: HTTP请求对象
+            
+        Returns:
+            Response: 删除结果
+        """
         try:
             user = request.user
             

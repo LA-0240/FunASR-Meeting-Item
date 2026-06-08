@@ -1,3 +1,7 @@
+"""
+ASR API 视图模块
+导出所有API视图类，提供统一的导入接口
+"""
 # 导出所有视图类，保持引用一致性
 from .base import HealthCheckView
 from .asr import ASRTranscribeView

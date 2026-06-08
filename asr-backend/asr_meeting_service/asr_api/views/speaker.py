@@ -1,3 +1,7 @@
+"""
+说话人管理视图模块
+提供说话人信息、声纹管理等功能
+"""
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -16,8 +20,18 @@ from ..voiceprint_utils import extract_voiceprint_feature, append_voiceprint, ch
 # ------------------- Speaker 列表 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class SpeakerListView(APIView):
+    """获取说话人列表视图：获取用户的所有说话人"""
     @method_decorator(require_auth)
     def get(self, request):
+        """
+        获取说话人列表
+        
+        Args:
+            request: HTTP请求对象，可选包含搜索参数
+            
+        Returns:
+            Response: 包含说话人列表的响应
+        """
         try:
             name = request.query_params.get('name', '').strip()
             
@@ -84,9 +98,18 @@ class SpeakerListView(APIView):
 # ------------------- Speaker 创建 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class SpeakerAddView(APIView):
-    """创建 Speaker，可选择同时上传第一条声纹，会预匹配库里是否有相似人"""
+    """创建说话人视图：创建新说话人，可选上传声纹"""
     @method_decorator(require_auth)
     def post(self, request):
+        """
+        创建说话人，可选择同时上传第一条声纹，会预匹配库里是否有相似人
+        
+        Args:
+            request: HTTP请求对象，包含说话人名称和音频文件
+            
+        Returns:
+            Response: 创建结果
+        """
         try:
             speaker_name = request.POST.get("name", "").strip()
             if not speaker_name:
@@ -228,9 +251,18 @@ class SpeakerAddView(APIView):
 # ------------------- Speaker 更新 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class SpeakerUpdateView(APIView):
-    """重命名说话人、更新头像"""
+    """更新说话人视图：重命名或更新头像"""
     @method_decorator(require_auth)
     def post(self, request):
+        """
+        重命名说话人、更新头像
+        
+        Args:
+            request: HTTP请求对象，包含说话人ID和更新内容
+            
+        Returns:
+            Response: 更新结果
+        """
         try:
             # 🌟 从 request.POST 取（因为是 form-data）
             print(f'[DEBUG] SpeakerUpdateView request.POST: {request.POST}')
@@ -331,8 +363,18 @@ class SpeakerUpdateView(APIView):
 # ------------------- Speaker 删除 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class SpeakerDeleteView(APIView):
+    """删除说话人视图：删除说话人及其声纹"""
     @method_decorator(require_auth)
     def post(self, request):
+        """
+        删除说话人
+        
+        Args:
+            request: HTTP请求对象，包含说话人ID
+            
+        Returns:
+            Response: 删除结果
+        """
         try:
             sp_id = request.data.get("id")
             if not sp_id:
@@ -381,8 +423,19 @@ class SpeakerDeleteView(APIView):
 # ------------------- Speaker 头像上传 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class SpeakerAvatarUploadView(APIView):
+    """上传说话人头像视图：上传或更新说话人头像"""
     @method_decorator(require_auth)
     def post(self, request, sp_id):
+        """
+        上传说话人头像
+        
+        Args:
+            request: HTTP请求对象，包含头像文件
+            sp_id: 说话人ID
+            
+        Returns:
+            Response: 上传结果
+        """
         try:
             try:
                 speaker = Speaker.objects.get(id=sp_id, user=request.user)
@@ -451,8 +504,19 @@ class SpeakerAvatarUploadView(APIView):
 # ------------------- Speaker 头像删除 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class SpeakerAvatarDeleteView(APIView):
+    """删除说话人头像视图：移除说话人的头像"""
     @method_decorator(require_auth)
     def post(self, request, sp_id):
+        """
+        删除说话人头像
+        
+        Args:
+            request: HTTP请求对象
+            sp_id: 说话人ID
+            
+        Returns:
+            Response: 删除结果
+        """
         try:
             try:
                 speaker = Speaker.objects.get(id=sp_id, user=request.user)
@@ -491,9 +555,20 @@ class SpeakerAvatarDeleteView(APIView):
 # ------------------- 删除 Speaker 的声纹 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class SpeakerVoiceprintDeleteView(APIView):
-    """删除 Speaker 的某条声纹，但不能删除该 Speaker 最早创建的那条 manual 声纹"""
+    """删除声纹视图：删除说话人的某条声纹"""
     @method_decorator(require_auth)
     def post(self, request, sp_id, vp_id):
+        """
+        删除说话人的某条声纹
+        
+        Args:
+            request: HTTP请求对象
+            sp_id: 说话人ID
+            vp_id: 声纹ID
+            
+        Returns:
+            Response: 删除结果
+        """
         try:
             print(f'[DEBUG] SpeakerVoiceprintDeleteView sp_id: {sp_id}, vp_id: {vp_id}')
             
@@ -558,9 +633,19 @@ class SpeakerVoiceprintDeleteView(APIView):
 # ------------------- 给 Speaker 追加声纹 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class SpeakerVoiceprintAddView(APIView):
-    """给某个说话人追加新声纹"""
+    """追加声纹视图：为说话人添加新的声纹"""
     @method_decorator(require_auth)
     def post(self, request, sp_id):
+        """
+        给某个说话人追加新声纹
+        
+        Args:
+            request: HTTP请求对象，包含音频文件
+            sp_id: 说话人ID
+            
+        Returns:
+            Response: 添加结果
+        """
         try:
             try:
                 speaker = Speaker.objects.get(id=sp_id, user=request.user)
@@ -651,9 +736,20 @@ class SpeakerVoiceprintAddView(APIView):
 # ------------------- 更新 Speaker 指定的声纹 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class SpeakerVoiceprintUpdateView(APIView):
-    """更新 Speaker 指定的声纹（上传新音频替换）"""
+    """更新声纹视图：替换说话人的某条声纹"""
     @method_decorator(require_auth)
     def post(self, request, sp_id, vp_id):
+        """
+        更新说话人指定的声纹
+        
+        Args:
+            request: HTTP请求对象，包含新的音频文件
+            sp_id: 说话人ID
+            vp_id: 声纹ID
+            
+        Returns:
+            Response: 更新结果
+        """
         try:
             print(f'[DEBUG] SpeakerVoiceprintUpdateView sp_id: {sp_id}, vp_id: {vp_id}')
             print(f'[DEBUG] request.FILES: {request.FILES}')
@@ -771,9 +867,20 @@ class SpeakerVoiceprintUpdateView(APIView):
 # ------------------- Speaker 声纹音频获取 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class SpeakerVoiceprintAudioView(APIView):
-    """获取 Speaker 声纹音频文件（用于前端播放）"""
+    """获取声纹音频视图：获取声纹对应的音频文件用于播放"""
     @method_decorator(require_auth)
     def get(self, request, sp_id, vp_id):
+        """
+        获取说话人声纹音频文件
+        
+        Args:
+            request: HTTP请求对象
+            sp_id: 说话人ID
+            vp_id: 声纹ID
+            
+        Returns:
+            FileResponse: 音频文件
+        """
         try:
             # 检查 Speaker 是否存在
             try:

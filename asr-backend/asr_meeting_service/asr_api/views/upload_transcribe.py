@@ -1,3 +1,7 @@
+"""
+文件上传与自动转录视图模块
+提供文件上传并自动进行ASR转录的功能
+"""
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -22,9 +26,18 @@ if not os.path.exists(FILE_STORAGE_DIR):
 # ------------------- 文件上传自动转录接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class FileUploadTranscribeView(APIView):
+    """文件上传与自动转录视图：上传音频或视频文件后自动进行ASR转录"""
     @method_decorator(require_auth)
     def post(self, request):
-        """文件上传自动转录接口：上传文件后自动进行ASR转录并存储逐字稿"""
+        """
+        文件上传自动转录接口：上传文件后自动进行ASR转录并存储逐字稿
+        
+        Args:
+            request: HTTP请求对象，包含文件和会议类型
+            
+        Returns:
+            Response: 包含转录结果的响应
+        """
         try:
             # 1. 校验文件上传
             if 'file' not in request.FILES:

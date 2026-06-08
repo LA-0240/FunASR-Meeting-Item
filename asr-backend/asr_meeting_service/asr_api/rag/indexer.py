@@ -1,7 +1,41 @@
 # ==========================================
 # 索引器 - 构建向量数据库
-
 # ==========================================
+"""
+会议数据索引器
+==============
+
+本模块负责将会议相关数据（逐字稿、会议纪要、摘要、分段等）索引到向量数据库中，
+为后续的RAG检索提供数据基础。
+
+主要功能：
+    - 文件索引: 索引单个会议文件的所有相关数据
+    - 批量索引: 索引指定用户的所有文件
+    - 语义分块: 按句子边界智能切分文本
+    - 状态查询: 获取索引状态信息
+
+索引数据类型：
+    - 逐字稿 (transcript): 会议的完整文本记录
+    - 会议纪要 (summary): 会议的总结内容
+    - 会议摘要 (abstract): 会议的简短摘要
+    - 分段内容 (segment): 会议的时间分段内容
+    - 分段摘要 (segment_summary): 会议分段的摘要
+
+核心类：
+    Indexer: 会议数据索引器类
+
+使用方式：
+    from asr_api.rag import Indexer
+    # 索引单个文件
+    Indexer.index_file(file_id=1, rebuild=True)
+    # 索引用户所有文件
+    Indexer.index_all_user_files(user_id=1)
+
+注意事项：
+    - 索引过程会自动进行文本向量化
+    - 支持重建索引（先删除后添加）
+    - 逐字稿会进行语义分块处理
+"""
 from typing import List, Dict, Any, Optional
 from .config import RAGConfig
 from .vector_store import VectorStore
@@ -14,19 +48,35 @@ from asr_api.models import (
 
 
 class Indexer:
-    """会议数据索引器"""
+    """
+    会议数据索引器类
+    
+    负责从数据库中读取会议相关数据（逐字稿、会议纪要、分段等），
+    进行适当的文本分块处理，然后索引到向量数据库中。
+    
+    索引流程：
+        1. 读取数据库中的会议数据
+        2. 对长文本进行语义分块
+        3. 调用VectorStore进行向量化和存储
+    """
 
     @classmethod
     def index_file(cls, file_id: int, rebuild: bool = False) -> int:
         """
         索引单个会议文件
-
+        
+        将指定文件的所有相关数据（逐字稿、纪要、分段等）索引到向量数据库。
+        
         Args:
             file_id: 文件ID
-            rebuild: 是否先删除旧索引
+            rebuild: 是否先删除旧索引再重建
 
         Returns:
-            索引的文档块数量
+            int: 索引成功的文档块数量，失败返回0
+            
+        Examples:
+            >>> count = Indexer.index_file(file_id=1, rebuild=True)
+            >>> print(f"索引了 {count} 个文档块")
         """
         print(f"📚 开始索引文件ID: {file_id}")
 
@@ -156,13 +206,19 @@ class Indexer:
     def index_all_user_files(cls, user_id: int, rebuild: bool = False) -> int:
         """
         索引指定用户的所有文件
-
+        
+        批量索引用户的所有会议文件，适合初始化或重建索引。
+        
         Args:
             user_id: 用户ID
-            rebuild: 是否重建
+            rebuild: 是否对每个文件都重建索引
 
         Returns:
-            索引的总块数
+            int: 索引的总文档块数
+            
+        Examples:
+            >>> total = Indexer.index_all_user_files(user_id=1, rebuild=False)
+            >>> print(f"共索引 {total} 个文档块")
         """
         print(f"📚 开始索引用户ID={user_id} 的所有文件")
         total_chunks = 0
@@ -178,12 +234,22 @@ class Indexer:
     def _chunk_text(cls, text: str) -> List[str]:
         """
         按句子语义分块（中文优化）
-
+        
+        将长文本按句子边界切分，然后组合成不超过指定大小的块，
+        保持句子的完整性，避免语义被切断。
+        
+        中文句子结束标点：。！？；\n
+        
         Args:
-            text: 长文本
+            text: 待分块的长文本
 
         Returns:
-            分块列表
+            List[str]: 文本块列表
+            
+        Examples:
+            >>> chunks = Indexer._chunk_text("长文本内容...")
+            >>> for chunk in chunks:
+            ...     print(len(chunk))
         """
         if not text:
             return []
@@ -230,14 +296,16 @@ class Indexer:
     @classmethod
     def get_index_status(cls, file_id: Optional[int] = None, user_id: Optional[int] = None) -> Dict[str, Any]:
         """
-        获取索引状态
-
+        获取索引状态信息
+        
         Args:
-            file_id: 按文件过滤（可选）
-            user_id: 按用户过滤（可选）
+            file_id: 按文件过滤（可选，暂未实现）
+            user_id: 按用户过滤（可选，暂未实现）
 
         Returns:
-            状态信息
+            Dict[str, Any]: 索引状态信息，包含：
+                - total_documents: 总文档数
+                - chroma_dir: ChromaDB存储目录
         """
         total_count = VectorStore.count()
         return {

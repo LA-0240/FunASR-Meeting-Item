@@ -1,3 +1,11 @@
+
+<!--
+ * @Description: 主页面布局组件
+ * 包含顶部导航栏、左侧菜单和内容区域,
+ * 支持用户信息展示、管理后台入口、路由导航等功能
+ * @Author: Trae AI
+ * @Date: 2026
+-->
 <template>
   <div class="home-container">
     <!-- 顶部导航栏 -->
@@ -55,6 +63,10 @@
 </template>
 
 <script>
+/**
+ * HomeView 组件 - 主页面布局
+ * 包含导航栏、侧边菜单和内容区域,是登录后的主界面
+ */
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { userApi } from '../api/userApi';
@@ -65,12 +77,14 @@ export default {
   setup() {
     const router = useRouter();
     const route = useRoute();
+    // 用户信息
     const user = ref(null);
 
     // 从 localStorage 读取管理员状态
     const isStaff = computed(() => localStorage.getItem('is_staff') === 'true');
     const isSuperuser = computed(() => localStorage.getItem('is_superuser') === 'true');
 
+    // 菜单项配置
     const menuItems = [
       { path: '/home/conference', icon: '📅', label: '会议' },
       { path: '/home/voiceprint', icon: '📢', label: '声纹库' },
@@ -78,10 +92,15 @@ export default {
       { path: '/home/user', icon: '👤', label: '用户' }
     ];
 
+    // 当前路由路径
     const currentPath = computed(() => {
       return route.path;
     });
 
+    /**
+     * 从API加载用户信息
+     * 支持多种响应格式,并将用户信息保存到localStorage
+     */
     const loadUserInfo = async () => {
       try {
         const response = await userApi.getProfile();
@@ -122,7 +141,10 @@ export default {
       }
     };
     
-    // 尝试从 localStorage 加载已有用户信息
+    /**
+     * 从 localStorage 加载已有用户信息
+     * 用于快速初始化,避免页面刷新时的空白
+     */
     const loadUserFromStorage = () => {
       const userInfoStr = localStorage.getItem('userInfo');
       if (userInfoStr) {
@@ -135,15 +157,27 @@ export default {
       }
     };
 
+    /**
+     * 导航到指定路由
+     * @param {string} path - 目标路由路径
+     */
     const navigateTo = (path) => {
       router.push(path);
     };
 
+    /**
+     * 打开管理后台
+     * 在新标签页打开Django Admin
+     */
     const openAdminPanel = () => {
       // 在新标签页打开管理后台
       window.open('http://localhost:8000/admin/', '_blank');
     };
 
+    /**
+     * 退出登录
+     * 调用退出API,清除本地数据,跳转到登录页
+     */
     const logout = async () => {
       try {
         await userApi.logout();
@@ -160,6 +194,12 @@ export default {
       }
     };
 
+    /**
+     * 组件挂载时初始化
+     * - 从localStorage快速加载用户信息
+     * - 从API刷新最新信息
+     * - 监听用户信息更新事件
+     */
     onMounted(() => {
       // 先从 localStorage 快速加载用户信息
       loadUserFromStorage();
@@ -179,7 +219,10 @@ export default {
       window._handleUserInfoUpdate = handleUserInfoUpdate;
     });
     
-    // 组件卸载时清理事件监听
+    /**
+     * 组件卸载时清理事件监听
+     * 避免内存泄漏
+     */
     onUnmounted(() => {
       if (window._handleUserInfoUpdate) {
         window.removeEventListener('userInfoUpdated', window._handleUserInfoUpdate);

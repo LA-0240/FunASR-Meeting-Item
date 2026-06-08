@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 清理数据库迁移和修复脚本
+用于清理有问题的数据库迁移记录
 """
 import os
 import sys
@@ -19,7 +20,10 @@ django.setup()
 from django.db import connection
 
 def clean_migrations():
-    """清理迁移记录"""
+    """
+    清理迁移记录
+    删除有问题的0011开头的迁移记录
+    """
     print("开始清理数据库迁移记录...")
     
     with connection.cursor() as cursor:

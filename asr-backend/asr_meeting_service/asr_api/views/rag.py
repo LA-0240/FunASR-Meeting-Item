@@ -1,3 +1,7 @@
+"""
+RAG智能会议助手视图模块
+提供会议内容索引、智能问答、检索等功能
+"""
 # ==========================================
 # RAG API - 智能会议助手接口
 # ==========================================
@@ -24,7 +28,12 @@ logger = logging.getLogger(__name__)
 
 # 异步索引任务
 def _index_task(file_id):
-    """后台索引任务"""
+    """
+    后台索引任务
+    
+    Args:
+        file_id: 文件ID
+    """
     try:
         logger.info(f"📚 [Async] 开始异步索引文件{file_id}...")
         
@@ -44,26 +53,32 @@ def _index_task(file_id):
 # ------------------- 聊天接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class ChatView(APIView):
-    """智能会议助手聊天接口"""
+    """智能会议助手聊天接口：基于RAG进行会议内容问答"""
 
     @method_decorator(require_auth)
     def post(self, request):
         """
         发送聊天消息
-
+        
+        Args:
+            request: HTTP请求对象，包含消息内容和文件ID
+            
         请求参数：
         {
             "file_id": 3,  # 可选，指定会议文件
             "message": "这次会议的主要决定是什么？",
             "session_id": "session_123"  # 可选，会话标识
         }
-
+        
         返回结果：
         {
             "answer": "...",
             "sources": [...],
             "thinking": "..."
         }
+        
+        Returns:
+            Response: 包含AI回答、来源和思考过程的响应
         """
         try:
             user = request.user
@@ -139,18 +154,24 @@ class ChatView(APIView):
 # ------------------- 索引接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class IndexFileView(APIView):
-    """索引会议文件到向量数据库"""
+    """索引会议文件视图：将会议内容索引到向量数据库"""
 
     @method_decorator(require_auth)
     def post(self, request):
         """
         索引文件（支持异步）
-
+        
+        Args:
+            request: HTTP请求对象，包含文件ID和异步参数
+        
         请求参数：
         {
             "file_id": 3,
             "async": true  # 可选，是否异步执行，默认为true
         }
+        
+        Returns:
+            Response: 索引结果
         """
         try:
             user = request.user
@@ -239,15 +260,21 @@ class IndexFileView(APIView):
 # ------------------- 索引状态接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class IndexStatusView(APIView):
-    """获取索引状态（包括异步索引进度）"""
+    """获取索引状态视图：查询向量数据库和索引进度"""
 
     @method_decorator(require_auth)
     def get(self, request):
         """
         获取向量数据库状态
-
+        
+        Args:
+            request: HTTP请求对象，可选包含文件ID参数
+        
         查询参数：
         - file_id: 可选，只查特定文件状态
+        
+        Returns:
+            Response: 包含索引状态的响应
         """
         try:
             user = request.user
@@ -297,18 +324,24 @@ class IndexStatusView(APIView):
 # ------------------- 测试接口（可选） -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class TestRetrieveView(APIView):
-    """测试检索功能"""
+    """测试检索视图：测试向量检索功能"""
 
     @method_decorator(require_auth)
     def post(self, request):
         """
         测试检索
-
+        
+        Args:
+            request: HTTP请求对象，包含文件ID和查询内容
+        
         请求参数：
         {
             "file_id": 3,
             "query": "这次会议的主要决定是什么？"
         }
+        
+        Returns:
+            Response: 检索结果
         """
         try:
             user = request.user

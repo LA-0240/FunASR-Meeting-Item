@@ -1,3 +1,7 @@
+"""
+声纹管理视图模块
+提供声纹添加、列表、重命名、删除、音频获取、头像管理等功能
+"""
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -17,9 +21,18 @@ from ..voiceprint_utils import extract_voiceprint_feature, check_voiceprint_dupl
 # ------------------- 声纹添加 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class VoiceprintAddView(APIView):
-    """添加声纹（上传音频提取特征，重复则提示）"""
+    """添加声纹视图：上传音频文件，提取声纹特征并存储"""
     @method_decorator(require_auth)  # 添加认证装饰器
     def post(self, request):
+        """
+        添加声纹（上传音频提取特征，重复则提示）
+        
+        Args:
+            request: HTTP请求对象，包含音频文件和声纹名称
+            
+        Returns:
+            Response: 添加结果
+        """
         try:
             # 1. 校验参数
             if 'file' not in request.FILES:
@@ -122,8 +135,18 @@ class VoiceprintAddView(APIView):
 # ------------------- 声纹列表 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class VoiceprintListView(APIView):
+    """声纹列表视图：获取当前用户的所有声纹"""
     @method_decorator(require_auth)  # 添加认证装饰器
     def get(self, request):
+        """
+        获取声纹列表
+        
+        Args:
+            request: HTTP请求对象，可选包含名称搜索参数
+            
+        Returns:
+            Response: 声纹列表
+        """
         try:
             # 获取查询参数
             name = request.query_params.get('name', '').strip()
@@ -161,8 +184,18 @@ class VoiceprintListView(APIView):
 # ------------------- 声纹修改 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class VoiceprintRenameView(APIView):
+    """声纹重命名视图：修改声纹的名称"""
     @method_decorator(require_auth)  # 添加认证装饰器
     def post(self, request):
+        """
+        重命名声纹
+        
+        Args:
+            request: HTTP请求对象，包含声纹ID和新名称
+            
+        Returns:
+            Response: 重命名结果
+        """
         try:
             # 1. 提取参数
             vp_id = request.data.get("id")
@@ -209,8 +242,18 @@ class VoiceprintRenameView(APIView):
 # ------------------- 声纹删除 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class VoiceprintDeleteView(APIView):
+    """声纹删除视图：删除指定的声纹"""
     @method_decorator(require_auth)  # 添加认证装饰器
     def post(self, request):
+        """
+        删除声纹
+        
+        Args:
+            request: HTTP请求对象，包含声纹ID
+            
+        Returns:
+            Response: 删除结果
+        """
         try:
             # 1. 提取参数
             vp_id = request.data.get("id")
@@ -255,9 +298,19 @@ class VoiceprintDeleteView(APIView):
 # ------------------- 声纹文件获取 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class VoiceprintAudioView(APIView):
-    """获取声纹音频文件（用于前端播放）"""
+    """获取声纹音频视图：获取声纹对应的音频文件用于播放"""
     @method_decorator(require_auth)  # 添加认证装饰器
     def get(self, request, vp_id):
+        """
+        获取声纹音频文件
+        
+        Args:
+            request: HTTP请求对象
+            vp_id: 声纹ID
+            
+        Returns:
+            FileResponse: 音频文件
+        """
         try:
             # 1. 检查声纹是否存在（针对当前用户）
             try:
@@ -333,9 +386,19 @@ class VoiceprintAudioView(APIView):
 # ------------------- 声纹头像上传 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class VoiceprintAvatarUploadView(APIView):
-    """声纹头像上传接口"""
+    """声纹头像上传视图：为声纹上传头像图片"""
     @method_decorator(require_auth)
     def post(self, request, vp_id):
+        """
+        上传声纹头像
+        
+        Args:
+            request: HTTP请求对象，包含头像文件
+            vp_id: 声纹ID
+            
+        Returns:
+            Response: 上传结果
+        """
         try:
             # 1. 检查声纹是否存在（针对当前用户）
             try:
@@ -415,9 +478,19 @@ class VoiceprintAvatarUploadView(APIView):
 # ------------------- 声纹头像删除 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class VoiceprintAvatarDeleteView(APIView):
-    """声纹头像删除接口"""
+    """声纹头像删除视图：删除声纹的头像"""
     @method_decorator(require_auth)
     def post(self, request, vp_id):
+        """
+        删除声纹头像
+        
+        Args:
+            request: HTTP请求对象
+            vp_id: 声纹ID
+            
+        Returns:
+            Response: 删除结果
+        """
         try:
             # 1. 检查声纹是否存在（针对当前用户）
             try:

@@ -1,10 +1,14 @@
 <template>
+  <!-- 确认遮罩层：点击遮罩层关闭弹窗 -->
   <div v-if="show" class="modal-overlay" @click.self="$emit('close')">
+    <!-- 确认弹窗内容 -->
     <div class="modal-content confirm-modal">
       <div class="modal-body">
+        <!-- 警告图标 -->
         <div class="confirm-icon">⚠️</div>
         <h3>{{ title }}</h3>
         <p v-if="message">{{ message }}</p>
+        <!-- 多行消息渲染 -->
         <p v-for="(line, index) in messageLines" :key="index">{{ line }}</p>
       </div>
       <div class="modal-footer">
@@ -16,21 +20,68 @@
 </template>
 
 <script>
+/**
+ * 确认操作弹窗组件
+ * 
+ * 会议详情页的二次确认组件
+ * 用于在执行重要操作前向用户确认
+ * 
+ * 功能特点：
+ * - 支持自定义标题和消息
+ * - 支持单行或多行消息
+ * - 提供取消和确认两个按钮
+ * - 确认按钮为危险样式，提示重要性
+ * - 点击遮罩层可取消
+ *
+ * @component
+ * @example
+ * <ConfirmModal 
+ *   :show="showConfirm" 
+ *   title="删除确认" 
+ *   message="确定要删除这个会议吗？" 
+ *   @close="showConfirm = false" 
+ *   @confirm="handleDelete" 
+ * />
+ */
 export default {
   name: 'ConfirmModal',
   props: {
+    /**
+     * 控制弹窗显示/隐藏
+     * 
+     * @type {Boolean}
+     * @default false
+     */
     show: {
       type: Boolean,
       default: false
     },
+    /**
+     * 弹窗标题
+     * 
+     * @type {String}
+     * @default '确认'
+     */
     title: {
       type: String,
       default: '确认'
     },
+    /**
+     * 单行提示消息
+     * 
+     * @type {String}
+     * @default ''
+     */
     message: {
       type: String,
       default: ''
     },
+    /**
+     * 多行提示消息（数组格式）
+     * 
+     * @type {Array<String>}
+     * @default []
+     */
     messageLines: {
       type: Array,
       default: () => []

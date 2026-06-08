@@ -1,3 +1,7 @@
+"""
+文件管理视图模块
+提供文件上传、列表、重命名、下载、删除等功能
+"""
 from django.conf import settings
 from django.http import FileResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -20,9 +24,21 @@ if not os.path.exists(FILE_STORAGE_DIR):
 # ------------------- 文件上传接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class FileUploadView(APIView):
+    """
+    文件上传视图
+    支持上传音频和视频文件
+    """
     @method_decorator(require_auth)
     def post(self, request):
-        """文件上传"""
+        """
+        文件上传
+        
+        Args:
+            request: HTTP请求对象，包含文件和会议类型
+            
+        Returns:
+            Response: 包含上传结果的响应
+        """
         try:
             if 'file' not in request.FILES:
                 return Response(
@@ -87,9 +103,21 @@ class FileUploadView(APIView):
 # ------------------- 文件列表接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class FileListView(APIView):
+    """
+    文件列表视图
+    获取用户的文件列表，支持搜索功能
+    """
     @method_decorator(require_auth)
     def get(self, request):
-        """获取用户文件列表，支持按文件名、类型和会议类型搜索"""
+        """
+        获取用户文件列表，支持按文件名、类型和会议类型搜索
+        
+        Args:
+            request: HTTP请求对象，包含搜索参数
+            
+        Returns:
+            Response: 包含文件列表的响应
+        """
         try:
             # 获取搜索参数
             search_name = request.query_params.get("name", "").strip()
@@ -164,9 +192,21 @@ class FileListView(APIView):
 # ------------------- 文件重命名接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class FileRenameView(APIView):
+    """
+    文件重命名视图
+    支持修改文件名和会议类型
+    """
     @method_decorator(require_auth)
     def post(self, request):
-        """文件重命名，支持修改会议类型"""
+        """
+        文件重命名，支持修改会议类型
+        
+        Args:
+            request: HTTP请求对象，包含文件ID、新名称和会议类型
+            
+        Returns:
+            Response: 包含重命名结果的响应
+        """
         try:
             file_id = request.data.get("file_id")
             new_name = request.data.get("new_name", "").strip()
@@ -214,8 +254,21 @@ class FileRenameView(APIView):
 # ------------------- 文件下载接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class FileDownloadView(APIView):
+    """
+    文件下载视图
+    支持HTTP Range请求，播放器直接访问时不需要认证
+    """
     def get(self, request, file_id):
-        """下载文件，支持HTTP Range请求，播放器直接访问时不需要认证"""
+        """
+        下载文件，支持HTTP Range请求，播放器直接访问时不需要认证
+        
+        Args:
+            request: HTTP请求对象
+            file_id: 文件ID
+            
+        Returns:
+            FileResponse/StreamingHttpResponse: 文件响应
+        """
         try:
             # 查找文件，不限制用户（播放器无法携带token）
             try:
@@ -259,7 +312,19 @@ class FileDownloadView(APIView):
             )
     
     def handle_range_request(self, path, file_size, content_type, filename, range_header):
-        """处理 Range 请求"""
+        """
+        处理 Range 请求
+        
+        Args:
+            path: 文件路径
+            file_size: 文件大小
+            content_type: 内容类型
+            filename: 文件名
+            range_header: Range请求头
+            
+        Returns:
+            StreamingHttpResponse: 流式响应
+        """
         from django.http import StreamingHttpResponse
         
         # 解析 Range 头
@@ -287,7 +352,16 @@ class FileDownloadView(APIView):
         return response
     
     def parse_range(self, range_header, file_size):
-        """解析 Range 头"""
+        """
+        解析 Range 头
+        
+        Args:
+            range_header: Range请求头
+            file_size: 文件大小
+            
+        Returns:
+            tuple: (start, end) 字节范围
+        """
         # 默认范围
         start = 0
         end = file_size - 1
@@ -326,7 +400,15 @@ class FileDownloadView(APIView):
         return start, end
     
     def get_content_type(self, filename):
-        """根据文件名获取 Content-Type"""
+        """
+        根据文件名获取 Content-Type
+        
+        Args:
+            filename: 文件名
+            
+        Returns:
+            str: Content-Type
+        """
         ext = filename.lower().split('.')[-1]
         
         # 音频类型
@@ -362,9 +444,21 @@ class FileDownloadView(APIView):
 # ------------------- 文件删除接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class FileDeleteView(APIView):
+    """
+    文件删除视图
+    删除文件及其关联的转录和纪要数据
+    """
     @method_decorator(require_auth)
     def post(self, request):
-        """文件删除"""
+        """
+        文件删除
+        
+        Args:
+            request: HTTP请求对象，包含文件ID
+            
+        Returns:
+            Response: 包含删除结果的响应
+        """
         try:
             file_id = request.data.get("file_id")
             

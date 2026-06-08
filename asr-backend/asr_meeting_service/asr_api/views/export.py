@@ -1,3 +1,7 @@
+"""
+Word文档导出视图模块
+提供转录文本、会议纪要、会议摘要的Word文档导出功能
+"""
 from django.conf import settings
 from django.http import FileResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -17,8 +21,20 @@ import traceback
 # ------------------- Word导出接口（转录文本） -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class ExportTranscriptionWordView(APIView):
+    """
+    转录文本导出视图
+    将语音分离结果导出为Word文档
+    """
     def post(self, request):
-        """导出语音分离结果为Word文档 （转录文本）"""
+        """
+        导出语音分离结果为Word文档（转录文本）
+        
+        Args:
+            request: HTTP请求对象，包含转录文本和文件名
+            
+        Returns:
+            FileResponse: Word文档文件响应
+        """
         try:
             # 1. 提取参数
             transcription_text = request.data.get("transcription_text", "").strip()
@@ -80,8 +96,20 @@ class ExportTranscriptionWordView(APIView):
 # ------------------- Word导出接口（会议纪要） -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class ExportSummaryWordView(APIView):
+    """
+    会议纪要导出视图
+    将会议纪要导出为Word文档
+    """
     def post(self, request):
-        """导出会议纪要为Word文档"""
+        """
+        导出会议纪要为Word文档
+        
+        Args:
+            request: HTTP请求对象，包含纪要文本和文件名
+            
+        Returns:
+            FileResponse: Word文档文件响应
+        """
         try:
             # 1. 提取参数
             summary_text = request.data.get("summary_text", "").strip()
@@ -142,8 +170,20 @@ class ExportSummaryWordView(APIView):
 # ------------------- Word导出接口（会议摘要） -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class ExportAbstractWordView(APIView):
+    """
+    会议摘要导出视图
+    将会议摘要导出为Word文档
+    """
     def post(self, request):
-        """导出会议摘要为Word文档"""
+        """
+        导出会议摘要为Word文档
+        
+        Args:
+            request: HTTP请求对象，包含摘要文本和文件名
+            
+        Returns:
+            FileResponse: Word文档文件响应
+        """
         try:
             # 1. 提取参数
             abstract_text = request.data.get("abstract_text", "").strip()

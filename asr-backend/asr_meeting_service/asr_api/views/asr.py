@@ -1,3 +1,7 @@
+"""
+ASR语音识别视图模块
+提供语音转文字、声纹识别等功能
+"""
 from django.conf import settings
 # from django.http import Response
 from django.views.decorators.csrf import csrf_exempt
@@ -21,15 +25,31 @@ from collections import defaultdict
 
 # 自定义认证类，支持 Bearer Token
 class BearerTokenAuthentication(TokenAuthentication):
+    """
+    自定义Token认证类，支持Bearer Token格式
+    """
     keyword = 'Bearer'
 
 # ------------------- ASR语音转文字接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class ASRTranscribeView(APIView):
+    """
+    ASR语音转文字视图
+    支持多说话人声纹识别，采用两步法：分离→切割→匹配
+    """
     authentication_classes = [BearerTokenAuthentication, TokenAuthentication]
     permission_classes = [AllowAny]
+    
     def post(self, request):
-        """语音转文字接口，支持多说话人声纹识别（两步法：分离→切割→匹配）"""
+        """
+        语音转文字接口，支持多说话人声纹识别（两步法：分离→切割→匹配）
+        
+        Args:
+            request: HTTP请求对象，包含音频文件和参数
+            
+        Returns:
+            Response: 包含识别结果、说话人信息的响应
+        """
         temp_file = None
         try:
             # 1. 校验文件上传

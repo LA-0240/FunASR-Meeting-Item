@@ -1,3 +1,10 @@
+<!--
+ * @Description: 会议详情组件
+ * 包含会议纪要、摘要、时间轴、逐字稿、智能问答等功能
+ * 支持音频/视频播放、字幕显示、全屏等功能
+ * @Author: Trae AI
+ * @Date: 2026
+-->
 <template>
   <div class="meeting-detail-container">
     <!-- 标题栏 -->

@@ -1,3 +1,7 @@
+"""
+工具函数模块
+提供异常处理、音频处理等通用工具函数
+"""
 # 确保导入路径和拼写完全正确
 from rest_framework.views import exception_handler
 from rest_framework.response import Response
@@ -10,7 +14,16 @@ from django.conf import settings
 import ffmpeg
 
 def custom_exception_handler(exc, context):
-    """自定义异常处理，对齐FastAPI的异常返回格式"""
+    """
+    自定义异常处理，对齐FastAPI的异常返回格式
+    
+    Args:
+        exc: 异常对象
+        context: 上下文对象
+        
+    Returns:
+        Response: 统一格式的异常响应
+    """
     response = exception_handler(exc, context)
 
     # 如果DRF未处理异常，手动封装
@@ -34,8 +47,13 @@ def custom_exception_handler(exc, context):
 def extract_audio_from_video(video_path, output_audio_path):
     """
     从视频中提取音频（WAV格式）
-    :param video_path: 视频文件路径
-    :param output_audio_path: 输出音频路径
+    
+    Args:
+        video_path: 视频文件路径
+        output_audio_path: 输出音频路径
+        
+    Returns:
+        bool: 提取成功返回True，失败返回False
     """
     try:
         (

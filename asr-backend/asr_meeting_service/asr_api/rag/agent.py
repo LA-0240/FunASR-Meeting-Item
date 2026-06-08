@@ -1,6 +1,45 @@
 # ==========================================
 # Agent - 智能会议助手
 # ==========================================
+"""
+智能会议助手 Agent 模块
+=======================
+
+本模块实现了会议相关的智能对话助手，支持多种工具调用和RAG检索，
+为用户提供专业的会议分析和问答服务。
+
+主要功能：
+1. 智能对话：支持与会议内容的自然语言交互
+2. 工具调用：
+   - SPEAKER_STATS: 发言人统计分析
+   - FULL_TRANSCRIPT: 完整逐字稿分析
+   - SPEAKER_FILTER: 指定发言人查询
+   - TIME_RANGE_QUERY: 时间范围查询
+   - KEYWORD_SEARCH: 关键词搜索
+   - SEGMENT_RETRIEVER: 分段内容检索
+3. RAG检索：基于向量数据库的语义检索
+4. 对话历史：支持多轮对话，保存上下文
+
+核心类：
+    MeetingAgent: 会议助手Agent类
+
+工作流程：
+    1. 用户提问 → LLM判断是否需要工具调用
+    2. 调用相应工具获取数据 → 构建上下文
+    3. LLM基于工具结果/RAG内容生成回答
+    4. 返回回答、来源、思考过程
+
+使用方式：
+    from asr_api.rag import MeetingAgent
+    agent = MeetingAgent(user_id=1, file_id=1)
+    result = agent.chat("会议主要讨论了什么？")
+    # result: {"answer": "...", "sources": [...], "thinking": "..."}
+
+注意事项：
+    - 需要配置LLM API（RAGConfig.LLM_CONFIG）
+    - 需要确保会议文件已索引（Indexer.index_file）
+    - 工具调用支持回退到关键词匹配（LLM失败时）
+"""
 import os
 import json
 from typing import Dict, List, Any, Optional
@@ -24,23 +63,55 @@ except ImportError:
 
 
 class MeetingAgent:
-    """会议助手Agent"""
-    # 初始化Agent
+    """
+    会议助手 Agent 类
+    
+    提供智能对话服务，支持工具调用和RAG检索，
+    帮助用户分析和查询会议内容。
+    
+    核心能力：
+    - 工具调用：6种专业工具处理不同类型问题
+    - RAG检索：基于向量数据库的语义搜索
+    - 对话历史：维护多轮对话上下文
+    - 来源追踪：记录信息来源，支持溯源
+    
+    Attributes:
+        user_id (int): 用户ID
+        file_id (Optional[int]): 会议文件ID（可选）
+        chat_history (List[Dict]): 对话历史记录
+    """
     def __init__(self, user_id: int, file_id: Optional[int] = None):
+        """
+        初始化会议助手Agent
+        
+        Args:
+            user_id: 用户ID，用于权限验证和数据隔离
+            file_id: 会议文件ID（可选），指定后可针对该文件提问
+        """
         self.user_id = user_id
         self.file_id = file_id
         self.chat_history = []  # 对话历史
         
-    # 发送消息，获取回答
     def chat(self, user_message: str) -> Dict[str, Any]:
         """
-        发送消息，获取回答
-
+        发送消息，获取智能回答
+        
+        核心方法：处理用户问题，可能调用工具或RAG检索，
+        最终由LLM生成专业回答。
+        
         Args:
-            user_message: 用户消息
+            user_message: 用户输入的问题或消息
 
         Returns:
-            回答结果（包含answer, sources, thinking）
+            Dict[str, Any]: 包含三部分的回答结果
+                - answer: LLM生成的回答文本
+                - sources: 信息来源列表（RAG片段或工具调用）
+                - thinking: 思考过程说明（如调用了什么工具）
+                
+        Examples:
+            >>> agent = MeetingAgent(user_id=1, file_id=1)
+            >>> result = agent.chat("谁在会议中发言最多？")
+            >>> print(result["answer"])
         """
         print(f"🤖 Agent收到消息: {user_message[:50]}...")
 

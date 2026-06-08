@@ -1,11 +1,38 @@
+/**
+ * 文档导出 API 模块
+ * ===================
+ * 
+ * 本模块提供会议文档导出相关的API接口，
+ * 主要是Word文档导出功能。
+ * 
+ * 主要功能：
+ * 1. 逐字稿导出为Word文档
+ * 2. 自动处理文件下载
+ * 
+ * 使用方式：
+ * import { exportApi } from './api/exportApi';
+ * 
+ * exportApi.exportToWord(data);
+ */
+
 import request from "./index";
 
+/**
+ * 文档导出API对象
+ * 
+ * 包含所有文档导出相关的API方法
+ */
 export const exportApi = {
   /**
    * 导出Word文档
+   * 
+   * 将会议内容导出为Word文档并自动下载
+   * 
    * @param {Object} data - 导出数据
    * @param {string} data.transcription_text - 文本内容
    * @param {string} data.file_name - 文件名
+   * @param {number} [data.file_id] - 文件ID（可选）
+   * @returns {Promise<boolean>} 导出成功返回true
    */
   exportToWord: async (data) => {
     try {

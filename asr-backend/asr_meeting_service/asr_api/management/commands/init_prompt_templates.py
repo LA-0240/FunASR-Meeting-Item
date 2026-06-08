@@ -1,3 +1,7 @@
+"""
+初始化默认Prompt模板命令
+用于在数据库中初始化各类会议的默认Prompt模板
+"""
 from django.core.management.base import BaseCommand
 from asr_api.models import Prompt
 
@@ -5,6 +9,13 @@ class Command(BaseCommand):
     help = '初始化默认的Prompt模板'
 
     def handle(self, *args, **kwargs):
+        """
+        执行初始化命令
+        
+        Args:
+            *args: 位置参数
+            **kwargs: 关键字参数
+        """
         # 检查是否已经存在默认模板
         if Prompt.objects.filter(category='default').exists():
             self.stdout.write(self.style.WARNING('默认模板已存在，跳过初始化'))

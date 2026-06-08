@@ -1,5 +1,7 @@
 <template>
+  <!-- 加载遮罩层：点击遮罩层关闭弹窗 -->
   <div v-if="show" class="modal-overlay loading-overlay" @click.self="$emit('close')">
+    <!-- 加载弹窗内容 -->
     <div class="modal-content loading-modal">
       <div class="loading-spinner"></div>
       <p>正在处理中，请稍候...</p>
@@ -8,9 +10,31 @@
 </template>
 
 <script>
+/**
+ * 加载状态弹窗组件
+ * 
+ * 会议详情页的通用加载提示组件
+ * 用于在异步操作进行时向用户展示加载状态
+ * 
+ * 功能特点：
+ * - 显示旋转加载动画
+ * - 半透明遮罩层防止用户操作
+ * - 点击遮罩层可关闭（可选）
+ * - 固定定位显示在页面中央
+ *
+ * @component
+ * @example
+ * <LoadingModal :show="isLoading" @close="isLoading = false" />
+ */
 export default {
   name: 'LoadingModal',
   props: {
+    /**
+     * 控制弹窗显示/隐藏
+     * 
+     * @type {Boolean}
+     * @default false
+     */
     show: {
       type: Boolean,
       default: false

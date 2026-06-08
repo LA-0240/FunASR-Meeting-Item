@@ -1,3 +1,11 @@
+
+<!--
+ * @Description: 登录/注册页面组件
+ * 使用翻转卡片效果实现登录和注册界面的切换,
+ * 包含用户登录、注册功能,支持表单验证、加载状态等
+ * @Author: Trae AI
+ * @Date: 2026
+-->
 <template>
   <div class="login-container">
     <div class="flip-card" :class="{ 'flipped': isFlipped }">
@@ -92,6 +100,10 @@
 </template>
 
 <script>
+/**
+ * LoginView 组件 - 登录/注册页面
+ * 提供用户登录和注册功能,使用翻转动画切换表单
+ */
 import { ref, computed, reactive } from 'vue';
 import { useRouter } from 'vue-router';
 import { userApi } from '../api/userApi';
@@ -100,27 +112,41 @@ export default {
   name: 'LoginView',
   setup() {
     const router = useRouter();
+    
+    // 登录表单数据
     const loginForm = ref({ username: '', password: '' });
+    // 注册表单数据
     const registerForm = ref({ username: '', email: '', password: '', password2: '' });
+    // 加载状态
     const loginLoading = ref(false);
     const registerLoading = ref(false);
+    // 错误提示
     const loginError = ref('');
     const registerError = ref('');
     const registerSuccess = ref('');
+    // 卡片翻转状态
     const isFlipped = ref(false);
+    // 卡片DOM引用
     const cardRef = ref(null);
+    // 卡片变换参数
     const transform = reactive({
       rotateX: 0,
       rotateY: 0,
       scale: 1
     });
 
+    /**
+     * 计算卡片样式 - 实现3D变换效果
+     */
     const cardStyle = computed(() => {
       return {
         transform: `perspective(1000px) rotateX(${transform.rotateX}deg) rotateY(${transform.rotateY}deg) scale(${transform.scale})`
       };
     });
 
+    /**
+     * 切换登录/注册卡片
+     */
     const toggleFlip = () => {
       isFlipped.value = !isFlipped.value;
       loginError.value = '';
@@ -128,6 +154,10 @@ export default {
       registerSuccess.value = '';
     };
 
+    /**
+     * 处理鼠标移动 - 实现卡片跟随鼠标倾斜的3D效果
+     * @param {Event} e - 鼠标事件
+     */
     const handleMouseMove = (e) => {
       if (!cardRef.value) return;
       
@@ -148,12 +178,19 @@ export default {
       transform.scale = 0.98;
     };
 
+    /**
+     * 处理鼠标离开 - 重置卡片变换
+     */
     const handleMouseLeave = () => {
       transform.rotateX = 0;
       transform.rotateY = 0;
       transform.scale = 1;
     };
 
+    /**
+     * 用户登录
+     * 验证表单,调用登录API,成功后跳转到首页
+     */
     const login = async () => {
       if (!loginForm.value.username || !loginForm.value.password) {
         loginError.value = '请输入用户名和密码';
@@ -182,6 +219,10 @@ export default {
       }
     };
 
+    /**
+     * 用户注册
+     * 验证表单,调用注册API,成功后自动切换到登录页
+     */
     const register = async () => {
       if (!registerForm.value.username || !registerForm.value.password || !registerForm.value.email) {
         registerError.value = '请填写所有必填项';

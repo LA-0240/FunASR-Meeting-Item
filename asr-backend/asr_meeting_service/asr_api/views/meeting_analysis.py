@@ -1,3 +1,7 @@
+"""
+会议分析视图模块
+提供说话人分析、会议概览、时间分布、主题分析、决策分析等功能
+"""
 from django.http import JsonResponse, HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -14,9 +18,19 @@ from django.conf import settings
 
 @method_decorator(csrf_exempt, name='dispatch')
 class MeetingAnalysisView(APIView):
+    """会议分析视图：提供多维度的会议数据分析"""
     @method_decorator(require_auth)
     def get(self, request, file_id):
-        """获取会议分析结果"""
+        """
+        获取会议分析结果
+        
+        Args:
+            request: HTTP请求对象
+            file_id: 会议文件ID
+            
+        Returns:
+            Response: 包含说话人分析、会议概览、时间分布、主题分析、决策分析的结果
+        """
         try:
             # 1. 获取文件对象
             file = UploadedFile.objects.get(id=file_id)
@@ -80,7 +94,15 @@ class MeetingAnalysisView(APIView):
             )
     
     def _collect_data(self, file):
-        """收集分析所需的数据"""
+        """
+        收集分析所需的数据
+        
+        Args:
+            file: 会议文件对象
+            
+        Returns:
+            dict: 包含文件、转录文本、分段、会议纪要的数据
+        """
         data = {
             'file': file,
             'transcription': None,
@@ -111,7 +133,15 @@ class MeetingAnalysisView(APIView):
         return data
     
     def _analyze_speakers(self, data):
-        """分析说话人"""
+        """
+        分析说话人数据
+        
+        Args:
+            data: 收集到的会议数据
+            
+        Returns:
+            dict: 包含说话人列表和说话人数量的分析结果
+        """
         transcription = data.get('transcription')
         if not transcription:
             return {
@@ -151,7 +181,15 @@ class MeetingAnalysisView(APIView):
         }
     
     def _extract_speaker_data(self, transcription_text):
-        """从逐字稿中提取说话人数据"""
+        """
+        从逐字稿中提取说话人数据
+        
+        Args:
+            transcription_text: 转录文本
+            
+        Returns:
+            dict: 说话人数据字典
+        """
         lines = transcription_text.split('\n')
         speaker_data = {}
         
@@ -176,7 +214,17 @@ class MeetingAnalysisView(APIView):
         return speaker_data
     
     def _determine_role(self, count, speaking_time, percentage):
-        """基于发言数据确定角色"""
+        """
+        基于发言数据确定角色
+        
+        Args:
+            count: 发言次数
+            speaking_time: 发言时长
+            percentage: 发言占比
+            
+        Returns:
+            str: 角色标签
+        """
         if percentage > 30:
             return "主导者"
         elif percentage > 15:
@@ -187,7 +235,15 @@ class MeetingAnalysisView(APIView):
             return "沉默参与者"
     
     def _get_file_duration(self, file):
-        """获取文件实际时长"""
+        """
+        获取文件实际时长
+        
+        Args:
+            file: 文件对象
+            
+        Returns:
+            float: 文件时长（秒）
+        """
         # 优先从file对象获取duration
         duration = getattr(file, 'duration', 0)
         if duration > 0:
@@ -212,7 +268,15 @@ class MeetingAnalysisView(APIView):
             return 3600  # 默认值
 
     def _analyze_meeting_overview(self, data):
-        """分析会议整体情况"""
+        """
+        分析会议整体情况
+        
+        Args:
+            data: 收集到的会议数据
+            
+        Returns:
+            dict: 会议概览分析结果
+        """
         file = data['file']
         transcription = data.get('transcription')
         
@@ -246,7 +310,15 @@ class MeetingAnalysisView(APIView):
         }
     
     def _analyze_time_distribution(self, data):
-        """分析时间分布"""
+        """
+        分析时间分布和发言热度
+        
+        Args:
+            data: 收集到的会议数据
+            
+        Returns:
+            dict: 时间分布分析结果
+        """
         file = data['file']
         segments = data['segments']
         transcription = data.get('transcription')
@@ -339,7 +411,15 @@ class MeetingAnalysisView(APIView):
         }
     
     def _analyze_topics(self, data):
-        """分析主题"""
+        """
+        分析会议主题
+        
+        Args:
+            data: 收集到的会议数据
+            
+        Returns:
+            dict: 主题分析结果
+        """
         segments = data['segments']
         summary = data.get('summary')
         transcription = data.get('transcription')
@@ -406,7 +486,15 @@ class MeetingAnalysisView(APIView):
         }
     
     def _analyze_decisions(self, data):
-        """分析决策和行动项"""
+        """
+        分析决策和行动项
+        
+        Args:
+            data: 收集到的会议数据
+            
+        Returns:
+            dict: 决策和行动项分析结果
+        """
         summary = data.get('summary')
         transcription = data.get('transcription')
         

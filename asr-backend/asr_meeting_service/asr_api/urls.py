@@ -1,3 +1,7 @@
+"""
+API路由配置模块
+定义所有API接口的URL路由和视图映射
+"""
 from django.urls import path
 from .views import (
     # 基础接口

@@ -1,3 +1,10 @@
+<!--
+ * @Description: 模板管理组件
+ * 支持纪要模板和摘要模板的添加、编辑、删除、复制
+ * 支持网格和列表两种视图模式
+ * @Author: Trae AI
+ * @Date: 2026
+-->
 <template>
   <div class="template-container">
     <!-- 顶部标签栏 -->
@@ -213,6 +220,10 @@
 </template>
 
 <script>
+/**
+ * TemplateView 组件 - 模板管理
+ * 管理纪要模板和摘要模板，支持增删改查、复制粘贴等操作
+ */
 import { ref, computed, onMounted, watch } from 'vue';
 import { promptApi } from '../api/promptApi';
 

@@ -1,3 +1,7 @@
+"""
+Prompt模板管理视图模块
+提供Prompt模板的增删改查功能
+"""
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -11,9 +15,18 @@ from ..auth_utils import require_auth
 # ------------------- Prompt 列表 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class PromptListView(APIView):
-    """获取Prompt模板列表"""
+    """获取Prompt模板列表视图：获取默认模板和用户自定义模板"""
     @method_decorator(require_auth)  # 添加认证装饰器
     def get(self, request):
+        """
+        获取Prompt模板列表
+        
+        Args:
+            request: HTTP请求对象，包含可选的搜索参数
+            
+        Returns:
+            Response: 包含Prompt列表的响应
+        """
         try:
             # 获取查询参数
             name = request.query_params.get('name', '').strip()
@@ -81,9 +94,18 @@ class PromptListView(APIView):
 # ------------------- 添加 Prompt -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class PromptAddView(APIView):
-    """添加自定义Prompt模板"""
+    """添加Prompt模板视图：创建新的自定义Prompt模板"""
     @method_decorator(require_auth)  # 添加认证装饰器
     def post(self, request):
+        """
+        添加自定义Prompt模板
+        
+        Args:
+            request: HTTP请求对象，包含Prompt名称和内容
+            
+        Returns:
+            Response: 添加结果
+        """
         try:
             # 1. 提取参数
             name = request.data.get("name", "").strip()
@@ -152,9 +174,19 @@ class PromptAddView(APIView):
 # ------------------- 更新 Prompt -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class PromptUpdateView(APIView):
-    """更新自定义Prompt模板"""
+    """更新Prompt模板视图：编辑现有的Prompt模板"""
     @method_decorator(require_auth)  # 添加认证装饰器
     def put(self, request, prompt_id):
+        """
+        更新自定义Prompt模板
+        
+        Args:
+            request: HTTP请求对象，包含Prompt名称和内容
+            prompt_id: Prompt模板ID
+            
+        Returns:
+            Response: 更新结果
+        """
         try:
             # 1. 提取参数
             name = request.data.get("name", "").strip()
@@ -217,9 +249,19 @@ class PromptUpdateView(APIView):
 # ------------------- 删除 Prompt -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class PromptDeleteView(APIView):
-    """删除自定义Prompt模板"""
+    """删除Prompt模板视图：删除用户自定义的Prompt模板"""
     @method_decorator(require_auth)  # 添加认证装饰器
     def delete(self, request, prompt_id):
+        """
+        删除自定义Prompt模板
+        
+        Args:
+            request: HTTP请求对象
+            prompt_id: Prompt模板ID
+            
+        Returns:
+            Response: 删除结果
+        """
         try:
             # 1. 检查模板是否存在且属于当前用户
             try:
@@ -249,9 +291,19 @@ class PromptDeleteView(APIView):
 # ------------------- 复制 Prompt -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class PromptCopyView(APIView):
-    """获取默认Prompt模板内容（用于前端复制到编辑窗口）"""
+    """复制Prompt模板视图：获取默认模板内容用于复制"""
     @method_decorator(require_auth)  # 添加认证装饰器
     def post(self, request, prompt_id):
+        """
+        获取默认Prompt模板内容（用于前端复制到编辑窗口）
+        
+        Args:
+            request: HTTP请求对象
+            prompt_id: Prompt模板ID
+            
+        Returns:
+            Response: 包含Prompt内容的响应
+        """
         try:
             # 1. 检查默认模板是否存在
             try:

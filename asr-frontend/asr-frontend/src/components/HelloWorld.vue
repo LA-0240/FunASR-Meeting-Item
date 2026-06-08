@@ -1,29 +1,56 @@
 <script setup>
+/**
+ * HelloWorld 组件
+ * 
+ * Vue3 + Vite 项目的默认欢迎页组件
+ * 主要用于展示项目入门信息和技术栈介绍
+ * 
+ * 功能特点：
+ * - 展示项目技术栈（Vue + Vite）
+ * - 提供文档和社区资源链接
+ * - 包含简单的计数器交互演示
+ *
+ * @component
+ */
 import { ref } from 'vue'
 import viteLogo from '../assets/vite.svg'
 import heroImg from '../assets/hero.png'
 import vueLogo from '../assets/vue.svg'
 
+/**
+ * 计数器响应式变量
+ * 
+ * 用于演示 Vue3 的响应式系统
+ * 点击按钮时会自动更新显示
+ * 
+ * @type {import('vue').Ref<number>}
+ */
 const count = ref(0)
 </script>
 
 <template>
+  <!-- 主展示区域：技术栈 Logo 和入门说明 -->
   <section id="center">
+    <!-- Hero 区域：展示项目 Logo -->
     <div class="hero">
       <img :src="heroImg" class="base" width="170" height="179" alt="" />
       <img :src="vueLogo" class="framework" alt="Vue logo" />
       <img :src="viteLogo" class="vite" alt="Vite logo" />
     </div>
+    <!-- 入门说明区域 -->
     <div>
       <h1>Get started</h1>
       <p>Edit <code>src/App.vue</code> and save to test <code>HMR</code></p>
     </div>
+    <!-- 计数器按钮：演示响应式系统 -->
     <button class="counter" @click="count++">Count is {{ count }}</button>
   </section>
 
   <div class="ticks"></div>
 
+  <!-- 后续步骤区域：文档和社区资源 -->
   <section id="next-steps">
+    <!-- 文档资源 -->
     <div id="docs">
       <svg class="icon" role="presentation" aria-hidden="true">
         <use href="/icons.svg#documentation-icon"></use>
@@ -45,6 +72,7 @@ const count = ref(0)
         </li>
       </ul>
     </div>
+    <!-- 社区资源 -->
     <div id="social">
       <svg class="icon" role="presentation" aria-hidden="true">
         <use href="/icons.svg#social-icon"></use>

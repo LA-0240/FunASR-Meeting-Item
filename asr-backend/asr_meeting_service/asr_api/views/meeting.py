@@ -1,3 +1,7 @@
+"""
+会议管理视图模块
+提供会议纪要生成、会议摘要生成、分段生成、纪要编辑等功能
+"""
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -25,9 +29,18 @@ llm_client = OpenAI(
 # ------------------- 会议纪要生成接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class MeetingSummaryView(APIView):
+    """会议纪要生成视图：使用LLM生成结构化会议纪要"""
     @method_decorator(require_auth)
     def post(self, request):
-        """基于文件ID生成结构化会议纪要"""
+        """
+        基于文件ID生成结构化会议纪要
+        
+        Args:
+            request: HTTP请求对象，包含文件ID、Prompt ID等参数
+            
+        Returns:
+            Response: 包含生成的会议纪要的响应
+        """
         try:
             # 1. 提取请求参数
             file_id = request.data.get("file_id")
@@ -211,9 +224,18 @@ class MeetingSummaryView(APIView):
 # ------------------- 会议摘要生成接口（轻量化） -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class MeetingAbstractView(APIView):
+    """会议摘要生成视图：使用LLM生成轻量化会议摘要"""
     @method_decorator(require_auth)
     def post(self, request):
-        """基于文件ID生成轻量化会议摘要（核心要点提炼）"""
+        """
+        基于文件ID生成轻量化会议摘要（核心要点提炼）
+        
+        Args:
+            request: HTTP请求对象，包含文件ID、摘要长度等参数
+            
+        Returns:
+            Response: 包含生成的会议摘要的响应
+        """
         try:
             # 1. 提取请求参数
             file_id = request.data.get("file_id")
@@ -367,7 +389,14 @@ class MeetingAbstractView(APIView):
                     summary.abstract_text = meeting_abstract
                     summary.save()
                 except MeetingSummary.DoesNotExist:
-                    pass
+                    # 如果MeetingSummary不存在，创建新记录
+                    summary = MeetingSummary(
+                        file=file,
+                        summary_text="",
+                        abstract_text=meeting_abstract,
+                        is_customized=False
+                    )
+                    summary.save()
             
             return Response({
                 "status": "success",
@@ -391,9 +420,18 @@ class MeetingAbstractView(APIView):
 # ------------------- 获取会议纪要接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class GetMeetingSummaryView(APIView):
+    """获取会议纪要视图：获取已生成的会议纪要"""
     @method_decorator(require_auth)
     def get(self, request):
-        """获取文件的会议纪要"""
+        """
+        获取文件的会议纪要
+        
+        Args:
+            request: HTTP请求对象，包含文件ID参数
+            
+        Returns:
+            Response: 包含会议纪要的响应
+        """
         try:
             # 1. 提取请求参数
             file_id = request.query_params.get("file_id")
@@ -417,22 +455,20 @@ class GetMeetingSummaryView(APIView):
             # 4. 检查是否已生成纪要
             try:
                 existing_summary = MeetingSummary.objects.get(file=file)
-                if not existing_summary.summary_text:
-                    return Response(
-                        {"status": "failed", "detail": "会议纪要未生成"},
-                        status=HTTP_404_NOT_FOUND
-                    )
                 return Response({
                     "status": "success",
-                    "meeting_summary": existing_summary.summary_text,
+                    "meeting_summary": existing_summary.summary_text or "",
                     "is_customized": existing_summary.is_customized,
                     "timestamp": existing_summary.updated_at.strftime("%Y%m%d_%H%M%S")
                 }, status=HTTP_200_OK)
             except MeetingSummary.DoesNotExist:
-                return Response(
-                    {"status": "failed", "detail": "会议纪要未生成"},
-                    status=HTTP_404_NOT_FOUND
-                )
+                # 如果记录不存在，返回空内容而不是404
+                return Response({
+                    "status": "success",
+                    "meeting_summary": "",
+                    "is_customized": False,
+                    "timestamp": ""
+                }, status=HTTP_200_OK)
         
         except Exception as e:
             traceback.print_exc()
@@ -444,9 +480,18 @@ class GetMeetingSummaryView(APIView):
 # ------------------- 获取会议摘要接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class GetMeetingAbstractView(APIView):
+    """获取会议摘要视图：获取已生成的会议摘要"""
     @method_decorator(require_auth)
     def get(self, request):
-        """获取文件的会议摘要"""
+        """
+        获取文件的会议摘要
+        
+        Args:
+            request: HTTP请求对象，包含文件ID参数
+            
+        Returns:
+            Response: 包含会议摘要的响应
+        """
         try:
             # 1. 提取请求参数
             file_id = request.query_params.get("file_id")
@@ -470,21 +515,18 @@ class GetMeetingAbstractView(APIView):
             # 4. 检查是否已生成摘要
             try:
                 existing_summary = MeetingSummary.objects.get(file=file)
-                if not existing_summary.abstract_text:
-                    return Response(
-                        {"status": "failed", "detail": "会议摘要未生成"},
-                        status=HTTP_404_NOT_FOUND
-                    )
                 return Response({
                     "status": "success",
-                    "meeting_abstract": existing_summary.abstract_text,
+                    "meeting_abstract": existing_summary.abstract_text or "",
                     "timestamp": existing_summary.updated_at.strftime("%Y%m%d_%H%M%S")
                 }, status=HTTP_200_OK)
             except MeetingSummary.DoesNotExist:
-                return Response(
-                    {"status": "failed", "detail": "会议摘要未生成"},
-                    status=HTTP_404_NOT_FOUND
-                )
+                # 如果记录不存在，返回空内容而不是404
+                return Response({
+                    "status": "success",
+                    "meeting_abstract": "",
+                    "timestamp": ""
+                }, status=HTTP_200_OK)
         
         except Exception as e:
             traceback.print_exc()
@@ -496,9 +538,18 @@ class GetMeetingAbstractView(APIView):
 # ------------------- 会议纪要编辑接口（分离） -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class MeetingSummaryUpdateView(APIView):
+    """会议纪要更新视图：编辑已生成的会议纪要"""
     @method_decorator(require_auth)
     def put(self, request):
-        """更新会议纪要"""
+        """
+        更新会议纪要
+        
+        Args:
+            request: HTTP请求对象，包含文件ID和纪要文本
+            
+        Returns:
+            Response: 更新结果
+        """
         try:
             # 1. 提取请求参数
             file_id = request.data.get("file_id")
@@ -561,9 +612,18 @@ class MeetingSummaryUpdateView(APIView):
 # ------------------- 会议摘要编辑接口（分离） -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class MeetingAbstractUpdateView(APIView):
+    """会议摘要更新视图：编辑已生成的会议摘要"""
     @method_decorator(require_auth)
     def put(self, request):
-        """更新会议摘要"""
+        """
+        更新会议摘要
+        
+        Args:
+            request: HTTP请求对象，包含文件ID和摘要文本
+            
+        Returns:
+            Response: 更新结果
+        """
         try:
             # 1. 提取请求参数
             file_id = request.data.get("file_id")
@@ -627,7 +687,15 @@ class MeetingAbstractUpdateView(APIView):
 
 # 获取文件的转录文本
 def get_transcription(file):
-    """获取文件的转录文本"""
+    """
+    获取文件的转录文本
+    
+    Args:
+        file: 文件对象
+        
+    Returns:
+        tuple: (转录文本, 错误信息)
+    """
     print(f"[DEBUG] 获取文件转录文本 - 文件ID: {file.id}, 文件名: {file.original_name}")
     try:
         transcription = Transcription.objects.get(file=file)
@@ -642,7 +710,15 @@ def get_transcription(file):
 
 # 获取音频/视频文件的时长（秒）
 def get_audio_duration(file_path):
-    """获取音频/视频文件的时长（秒）"""
+    """
+    获取音频/视频文件的时长（秒）
+    
+    Args:
+        file_path: 文件路径
+        
+    Returns:
+        float: 文件时长（秒）
+    """
     print(f"[DEBUG] 获取文件时长 - 文件路径: {file_path}")
     try:
         # 检查文件是否存在
@@ -675,7 +751,16 @@ def get_audio_duration(file_path):
 
 # 基于内容语义进行分段
 def segment_transcription(transcription_text, total_duration=3600):
-    """基于内容语义进行分段"""
+    """
+    基于内容语义进行分段
+    
+    Args:
+        transcription_text: 转录文本
+        total_duration: 总时长（秒）
+        
+    Returns:
+        list: 分段列表
+    """
     print(f"[DEBUG] 开始语义分段 - 总时长: {total_duration} 秒")
     import re
     segments = []
@@ -805,7 +890,15 @@ def segment_transcription(transcription_text, total_duration=3600):
 
 # 使用LLM优化分段并生成标题和总结
 def optimize_segments_with_llm(segments):
-    """使用LLM优化分段并生成标题和总结"""
+    """
+    使用LLM优化分段并生成标题和总结
+    
+    Args:
+        segments: 分段列表
+        
+    Returns:
+        list: 优化后的分段列表
+    """
     print(f"[DEBUG] 开始使用单个LLM处理分段，共 {len(segments)} 个")
     optimized_segments = []
     
@@ -894,7 +987,15 @@ def optimize_segments_with_llm(segments):
 
 # 批量使用LLM优化分段并生成标题和总结
 def optimize_segments_with_llm_batch(segments):
-    """批量使用LLM优化分段并生成标题和总结"""
+    """
+    批量使用LLM优化分段并生成标题和总结
+    
+    Args:
+        segments: 分段列表
+        
+    Returns:
+        list: 优化后的分段列表
+    """
     print(f"[DEBUG] ========== 开始批量LLM处理 ==========")
     print(f"[DEBUG] 待处理的分段数量: {len(segments)}")
     if not segments:
@@ -986,7 +1087,14 @@ def optimize_segments_with_llm_batch(segments):
 
 # 存储分段数据到数据库
 def store_segments(file, user, segments):
-    """存储分段数据到数据库"""
+    """
+    存储分段数据到数据库
+    
+    Args:
+        file: 文件对象
+        user: 用户对象
+        segments: 分段列表
+    """
     print(f"[DEBUG] ========== 开始存储分段数据 ==========")
     print(f"[DEBUG] 文件ID: {file.id}, 用户ID: {user.id}, 待存储分段数: {len(segments)}")
     
@@ -1013,25 +1121,44 @@ def store_segments(file, user, segments):
 
 # 序列化分段数据
 def serialize_segments(segments):
-    """序列化分段数据"""
-    return [{
-        "id": segment.id,
-        "index": segment.segment_index,
-        "start_time": segment.start_time,
-        "end_time": segment.end_time,
-        "title": segment.title,
-        "summary": segment.summary,
-        "is_edited": segment.is_edited,
-        "created_at": segment.created_at.isoformat(),
-        "updated_at": segment.updated_at.isoformat()
-    } for segment in segments]
+    """
+    序列化分段数据
+    
+    Args:
+        segments: 分段对象列表
+        
+    Returns:
+        list: 序列化后的分段数据列表
+    """
+    return [
+        {
+            "id": segment.id,
+            "index": segment.segment_index,
+            "start_time": segment.start_time,
+            "end_time": segment.end_time,
+            "title": segment.title,
+            "summary": segment.summary,
+            "is_edited": segment.is_edited,
+            "created_at": segment.created_at.isoformat(),
+            "updated_at": segment.updated_at.isoformat()
+        } for segment in segments
+    ]
 
 # ------------------- 生成分段接口 -------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class GenerateSegmentsView(APIView):
+    """生成分段视图：基于转录文本生成语义分段"""
     @method_decorator(require_auth)
     def post(self, request):
-        """生成会议文件分段"""
+        """
+        生成会议文件分段
+        
+        Args:
+            request: HTTP请求对象，包含文件ID、强制更新参数
+            
+        Returns:
+            Response: 包含分段数据的响应
+        """
         print(f"[DEBUG] ========== 开始生成分段 ==========")
         print(f"[DEBUG] 请求参数: {request.data}")
         try:
