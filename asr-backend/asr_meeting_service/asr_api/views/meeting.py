@@ -20,6 +20,9 @@ import json
 from ..models import UploadedFile, MeetingSummary, Transcription, Prompt, MeetingSegment
 from ..auth_utils import require_auth
 
+# 导入语义分段（项目新增）
+from .semantic_segmentation import semantic_segment_transcription
+
 # 初始化LLM客户端
 llm_client = OpenAI(
     api_key=settings.LLM_CONFIG["api_key"],
@@ -1215,9 +1218,19 @@ class GenerateSegmentsView(APIView):
             print(f"[DEBUG] 文件完整路径: {file_path}")
             total_duration = get_audio_duration(file_path)
             
-            # 7. 初步分段（使用基于内容语义的分段）
-            print(f"[DEBUG] 开始语义分段")
-            initial_segments = segment_transcription(transcription_text, total_duration=total_duration)
+            # 7. 初步分段（双模式：语义聚类 / 规则分段，默认语义）
+            segment_mode = request.data.get("mode", "semantic")  # "semantic" 或 "rule_based"
+            print(f"[DEBUG] 分段模式: {segment_mode}")
+            if segment_mode == "semantic":
+                print(f"[DEBUG] 使用语义聚类分段（KMeans + Embedding）")
+                initial_segments = semantic_segment_transcription(
+                    transcription_text, total_duration=total_duration
+                )
+            else:
+                print(f"[DEBUG] 使用规则分段（说话人+长度）")
+                initial_segments = segment_transcription(
+                    transcription_text, total_duration=total_duration
+                )
             
             # 8. LLM优化（使用批量处理）
             print(f"[DEBUG] 开始LLM优化")

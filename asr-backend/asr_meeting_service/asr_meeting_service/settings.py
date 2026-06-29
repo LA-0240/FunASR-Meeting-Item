@@ -168,7 +168,7 @@ AUTH_USER_MODEL = 'asr_api.User'
 
 # 自定义配置（LLM和ASR相关）
 LLM_CONFIG = {
-    "api_key": "ms-adac2d0b-1859-477d-ad15-99173fd37c11",  # 替换为实际Token
+    "api_key": "ms-d1b982a8-f8f5-4025-b207-21119f33c11d",  # 替换为实际Token
     "base_url": "https://api-inference.modelscope.cn/v1/",
     "model_name": "Qwen/Qwen3.5-35B-A3B"    
 }
